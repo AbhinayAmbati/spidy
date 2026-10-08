@@ -40,6 +40,15 @@ enum class ProviderType(
             "gemini-1.5-flash", "gemini-1.5-pro",
         ),
     ),
+    SARVAM(
+        displayName = "Sarvam AI",
+        // OpenAI-compatible chat completions endpoint.
+        defaultBaseUrl = "https://api.sarvam.ai/v1",
+        defaultModel = "sarvam-105b",
+        suggestedModels = listOf(
+            "sarvam-105b", "sarvam-105b-conversations",
+        ),
+    ),
     OPENROUTER(
         displayName = "OpenRouter",
         defaultBaseUrl = "https://openrouter.ai/api/v1",

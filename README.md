@@ -120,9 +120,13 @@ interface AIProvider {
 }
 ```
 
-Supported out of the box: **OpenAI**, **Anthropic**, **Google Gemini**, **OpenRouter**,
-and any **custom OpenAI-compatible** endpoint. Adding a provider is one `when` branch in
-`AIProviderFactory` plus, at most, one adapter class.
+Supported out of the box: **OpenAI**, **Anthropic**, **Google Gemini**, **Sarvam AI**,
+**OpenRouter**, and any **custom OpenAI-compatible** endpoint. Adding a provider is one
+`when` branch in `AIProviderFactory` plus, at most, one adapter class.
+
+Sarvam AI speaks the same request/response shape as OpenAI but prefers the
+`api-subscription-key` header over `Authorization: Bearer`, so the OpenAI-compatible
+adapter takes the auth header and prefix as parameters rather than assuming them.
 
 The model is given tools via native function/tool calling and must return a structured
 `AgentAction` — never Kotlin, shell, or any executable payload.

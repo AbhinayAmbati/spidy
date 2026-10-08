@@ -383,14 +383,20 @@ class AgentRuntime(
     }
 
     private fun friendly(e: Throwable): String = when (e) {
-        is AIProviderException -> when (e.kind) {
-            AIProviderException.Kind.NoKey -> "No API key is set. Add one in Settings to run tasks."
-            AIProviderException.Kind.Unauthorized -> "The API key was rejected. Check it in Settings."
-            AIProviderException.Kind.RateLimited -> "The provider is rate-limiting requests. Try again shortly."
-            AIProviderException.Kind.Network -> "I couldn't reach the AI provider. Check your connection."
-            AIProviderException.Kind.Server -> "The AI provider had a server error. Try again."
-            AIProviderException.Kind.Parse -> "The model returned something I couldn't understand. Try rephrasing."
-            AIProviderException.Kind.Unknown -> "Something went wrong talking to the provider."
+        is AIProviderException -> {
+            // Providers often say exactly what is wrong ("model X has been
+            // deprecated", "invalid API key"). Prefer that over canned text.
+            val detail = e.message?.takeIf { it.isNotBlank() }
+            when (e.kind) {
+                AIProviderException.Kind.NoKey -> "No API key is set. Add one in Settings to run tasks."
+                AIProviderException.Kind.Unauthorized ->
+                    detail ?: "The API key was rejected. Check it in Settings."
+                AIProviderException.Kind.RateLimited -> "The provider is rate-limiting requests. Try again shortly."
+                AIProviderException.Kind.Network -> "I couldn't reach the AI provider. Check your connection."
+                AIProviderException.Kind.Server -> detail ?: "The AI provider had a server error. Try again."
+                AIProviderException.Kind.Parse -> "The model returned something I couldn't understand. Try rephrasing."
+                AIProviderException.Kind.Unknown -> detail ?: "Something went wrong talking to the provider."
+            }
         }
         else -> "Something went wrong: ${e.message ?: "unknown error"}"
     }

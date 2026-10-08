@@ -27,6 +27,18 @@ class AIProviderFactory(
                     apiKey = key,
                 )
 
+            // Same OpenAI-compatible shape, different auth convention: Sarvam AI
+            // prefers `api-subscription-key` over `Authorization: Bearer`.
+            ProviderType.SARVAM ->
+                OpenAICompatibleProvider(
+                    id = "sarvam",
+                    baseUrl = config.baseUrl.ifBlank { config.type.defaultBaseUrl },
+                    model = config.model.ifBlank { config.type.defaultModel },
+                    apiKey = key,
+                    apiKeyHeader = "api-subscription-key",
+                    apiKeyPrefix = "",
+                )
+
             ProviderType.ANTHROPIC ->
                 AnthropicProvider(
                     baseUrl = config.baseUrl.ifBlank { config.type.defaultBaseUrl },

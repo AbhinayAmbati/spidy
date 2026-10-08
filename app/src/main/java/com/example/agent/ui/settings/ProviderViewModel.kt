@@ -128,12 +128,15 @@ class ProviderViewModel @Inject constructor(
                 _testState.value = TestState.Failure(
                     when (e.kind) {
                         AIProviderException.Kind.NoKey -> "No API key saved for this provider."
-                        AIProviderException.Kind.Unauthorized -> "The key was rejected by the provider."
+                        AIProviderException.Kind.Unauthorized ->
+                            e.message ?: "The key was rejected by the provider."
                         AIProviderException.Kind.RateLimited -> "Rate limited. The key works, but try again shortly."
                         AIProviderException.Kind.Network -> "Could not reach the provider. Check your connection."
-                        AIProviderException.Kind.Server -> "The provider returned a server error."
+                        AIProviderException.Kind.Server ->
+                            e.message ?: "The provider returned a server error."
                         AIProviderException.Kind.Parse -> "Connected, but the response could not be read."
-                        AIProviderException.Kind.Unknown -> "Connection failed."
+                        AIProviderException.Kind.Unknown ->
+                            e.message ?: "Connection failed."
                     }
                 )
             } catch (e: Exception) {
