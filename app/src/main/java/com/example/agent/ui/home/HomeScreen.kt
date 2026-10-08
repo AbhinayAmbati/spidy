@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.agent.R
 import com.example.agent.core.permissions.PermissionUtils
@@ -48,7 +50,7 @@ fun HomeScreen(
     val accessibilityEnabled by viewModel.accessibilityEnabled.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
 
-    LaunchedEffect(Unit) { viewModel.refreshPermissions() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshPermissions() }
 
     // Jump to the live execution view the moment a task starts.
     LaunchedEffect(progress.state) {

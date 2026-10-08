@@ -134,6 +134,12 @@ fun PermissionCard(
                 color = if (granted) MaterialTheme.spideyColors.success else MaterialTheme.spideyColors.warning,
                 label = if (granted) "Granted" else "Not granted",
             )
+            Spacer(Modifier.width(SpideySpacing.xs))
+            Text(
+                text = if (granted) "Enabled" else "Not enabled",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (granted) MaterialTheme.spideyColors.success else MaterialTheme.spideyColors.textSecondary,
+            )
         }
         Spacer(Modifier.height(SpideySpacing.xs))
         Text(

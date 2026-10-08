@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import com.example.agent.automation.accessibility.SpideyAccessibilityService
+import com.example.agent.automation.accessibility.SpideyNotificationListenerService
 
 /** Small helpers around the two runtime permissions Spidey actually needs. */
 object PermissionUtils {
@@ -18,6 +19,21 @@ object PermissionUtils {
         val enabled = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ) ?: return false
+        return enabled.split(':').any {
+            ComponentName.unflattenFromString(it) == expected
+        }
+    }
+
+    /**
+     * Whether the user granted "notification access" (a separate switch from the
+     * POST_NOTIFICATIONS runtime permission).
+     */
+    fun isNotificationListenerEnabled(context: Context): Boolean {
+        val expected = ComponentName(context, SpideyNotificationListenerService::class.java)
+        val enabled = Settings.Secure.getString(
+            context.contentResolver,
+            "enabled_notification_listeners",
         ) ?: return false
         return enabled.split(':').any {
             ComponentName.unflattenFromString(it) == expected

@@ -15,7 +15,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +22,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.agent.BuildConfig
 import com.example.agent.R
@@ -51,7 +52,10 @@ fun SettingsScreen(
     val accessibility by viewModel.accessibilityEnabled.collectAsStateWithLifecycle()
     val notifications by viewModel.notificationsGranted.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.refreshPermissions() }
+    // Accessibility and notification access are granted in *system* settings, so
+    // re-read on resume. A one-shot LaunchedEffect(Unit) never re-runs when the
+    // user comes back, which left "Enable" on screen after it was already on.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshPermissions() }
 
     Column(
         modifier = Modifier

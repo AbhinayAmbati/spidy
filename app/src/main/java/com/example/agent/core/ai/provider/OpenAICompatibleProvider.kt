@@ -15,6 +15,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -95,11 +97,16 @@ class OpenAICompatibleProvider(
         return AgentResponse(message = content, raw = raw)
     }
 
-    private fun execute(request: Request): String {
+    /**
+     * OkHttp's execute() blocks. It must never run on the caller's dispatcher —
+     * a ViewModel calling this from viewModelScope (Dispatchers.Main) would throw
+     * NetworkOnMainThreadException.
+     */
+    private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {
         try {
             client.newCall(request).execute().use { response ->
                 val bodyText = response.body?.string().orEmpty()
-                if (response.isSuccessful) return bodyText
+                if (response.isSuccessful) return@withContext bodyText
 
                 // Providers often explain precisely what is wrong (an unknown model id,
                 // a deprecated model, a missing scope). Surface that instead of a

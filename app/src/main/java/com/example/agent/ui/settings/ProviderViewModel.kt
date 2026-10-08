@@ -10,10 +10,12 @@ import com.example.agent.domain.model.MessageRole
 import com.example.agent.domain.model.ProviderConfig
 import com.example.agent.domain.model.ProviderType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -108,14 +110,18 @@ class ProviderViewModel @Inject constructor(
             _testState.value = TestState.Testing
             persist()
             try {
-                val provider = factory.create(
-                    ProviderConfig(
-                        type = _selected.value,
-                        model = _model.value.ifBlank { _selected.value.defaultModel },
-                        baseUrl = _baseUrl.value.ifBlank { _selected.value.defaultBaseUrl },
-                        hasApiKey = true,
+                // Reading the key touches EncryptedSharedPreferences (crypto + disk);
+                // keep it off the main thread along with the request itself.
+                val provider = withContext(Dispatchers.IO) {
+                    factory.create(
+                        ProviderConfig(
+                            type = _selected.value,
+                            model = _model.value.ifBlank { _selected.value.defaultModel },
+                            baseUrl = _baseUrl.value.ifBlank { _selected.value.defaultBaseUrl },
+                            hasApiKey = true,
+                        )
                     )
-                )
+                }
                 provider.generateResponse(
                     messages = listOf(
                         AgentMessage(MessageRole.System, "You are a connectivity check."),

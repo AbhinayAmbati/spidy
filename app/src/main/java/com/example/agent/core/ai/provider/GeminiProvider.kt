@@ -15,6 +15,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -65,18 +67,7 @@ class GeminiProvider(
             .build()
 
         val raw = try {
-            client.newCall(request).execute().use { response ->
-                val text = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    throw when (response.code) {
-                        400, 401, 403 -> AIProviderException(AIProviderException.Kind.Unauthorized, "The API key was rejected")
-                        429 -> AIProviderException(AIProviderException.Kind.RateLimited, "Rate limit reached")
-                        in 500..599 -> AIProviderException(AIProviderException.Kind.Server, "Provider error (${response.code})")
-                        else -> AIProviderException(AIProviderException.Kind.Unknown, "Request failed (${response.code})")
-                    }
-                }
-                text
-            }
+            execute(request)
         } catch (io: IOException) {
             throw AIProviderException(AIProviderException.Kind.Network, "Could not reach Gemini", io)
         }
@@ -112,6 +103,26 @@ class GeminiProvider(
             obj["text"]?.jsonPrimitive?.content?.let { text = it }
         }
         return AgentResponse(message = text, raw = raw)
+    }
+
+
+    /**
+     * OkHttp's execute() blocks. Run it on Dispatchers.IO so a caller on the main
+     * dispatcher (viewModelScope) cannot trigger NetworkOnMainThreadException.
+     */
+    private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {
+        client.newCall(request).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw when (response.code) {
+                        400, 401, 403 -> AIProviderException(AIProviderException.Kind.Unauthorized, "The API key was rejected")
+                        429 -> AIProviderException(AIProviderException.Kind.RateLimited, "Rate limit reached")
+                        in 500..599 -> AIProviderException(AIProviderException.Kind.Server, "Provider error (${response.code})")
+                        else -> AIProviderException(AIProviderException.Kind.Unknown, "Request failed (${response.code})")
+                    }
+                }
+            text
+        }
     }
 
     private companion object {
