@@ -1,0 +1,111 @@
+package com.example.agent.automation
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.IBinder
+import com.example.agent.MainActivity
+import com.example.agent.R
+import com.example.agent.core.agent.AgentRuntime
+import com.example.agent.domain.model.TaskState
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+/**
+ * Keeps the agent loop alive and visible while it works, so a long multi-step task
+ * is not killed when the user leaves the app. It mirrors the runtime's progress
+ * into a single, quiet notification.
+ */
+@AndroidEntryPoint
+class AgentForegroundService : Service() {
+
+    @Inject lateinit var runtime: AgentRuntime
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        createChannel()
+        startForeground(NOTIFICATION_ID, buildNotification("Working…"))
+
+        scope.launch {
+            runtime.progress.collectLatest { progress ->
+                when {
+                    progress.state.isTerminal -> stopSelf()
+                    else -> {
+                        val text = progress.message ?: "Working…"
+                        notify(buildNotification(text))
+                    }
+                }
+            }
+        }
+        return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
+
+    private fun notify(notification: Notification) {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager?.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun buildNotification(text: String): Notification {
+        val open = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return Notification.Builder(this, CHANNEL_ID)
+            .setContentTitle(getString(R.string.fgs_notification_title))
+            .setContentText(text)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentIntent(open)
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun createChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.fgs_channel_name),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply { description = getString(R.string.fgs_channel_desc) }
+        manager.createNotificationChannel(channel)
+    }
+
+    companion object {
+        private const val CHANNEL_ID = "spidey_agent"
+        private const val NOTIFICATION_ID = 42
+
+        fun start(context: Context) {
+            val intent = Intent(context, AgentForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        fun stop(context: Context) {
+            context.stopService(Intent(context, AgentForegroundService::class.java))
+        }
+    }
+}
