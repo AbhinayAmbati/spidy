@@ -3,6 +3,7 @@ package com.example.agent.ui.settings
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.agent.core.permissions.PermissionStatus
 import com.example.agent.core.permissions.PermissionUtils
 import com.example.agent.data.preferences.SettingsRepository
 import com.example.agent.data.repository.TaskHistoryRepository
@@ -33,15 +34,11 @@ class SettingsViewModel @Inject constructor(
     val memoryEnabled: StateFlow<Boolean> = settings.memoryEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
-    private val _accessibilityEnabled = MutableStateFlow(PermissionUtils.isAccessibilityEnabled(context))
-    val accessibilityEnabled: StateFlow<Boolean> = _accessibilityEnabled
-
-    private val _notificationsGranted = MutableStateFlow(PermissionUtils.hasNotificationPermission(context))
-    val notificationsGranted: StateFlow<Boolean> = _notificationsGranted
+    private val _permissions = MutableStateFlow(PermissionUtils.status(context))
+    val permissions: StateFlow<PermissionStatus> = _permissions
 
     fun refreshPermissions() {
-        _accessibilityEnabled.value = PermissionUtils.isAccessibilityEnabled(context)
-        _notificationsGranted.value = PermissionUtils.hasNotificationPermission(context)
+        _permissions.value = PermissionUtils.status(context)
     }
 
     fun setAppearance(mode: AppearanceMode) = viewModelScope.launch { settings.setAppearance(mode) }

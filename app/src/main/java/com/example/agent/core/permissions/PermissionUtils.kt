@@ -8,22 +8,28 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import com.example.agent.automation.accessibility.AccessibilityBridge
 import com.example.agent.automation.accessibility.SpideyAccessibilityService
 import com.example.agent.automation.accessibility.SpideyNotificationListenerService
 
-/** Small helpers around the two runtime permissions Spidey actually needs. */
+/** Small helpers around the permissions Spidey actually needs. */
 object PermissionUtils {
 
+    /** Whether the accessibility service is switched on in system settings. */
     fun isAccessibilityEnabled(context: Context): Boolean {
         val expected = ComponentName(context, SpideyAccessibilityService::class.java)
         val enabled = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
         ) ?: return false
-        return enabled.split(':').any {
-            ComponentName.unflattenFromString(it) == expected
+        return enabled.split(':').any { entry ->
+            val component = ComponentName.unflattenFromString(entry.trim()) ?: return@any false
+            component.packageName == expected.packageName && component.className == expected.className
         }
     }
+
+    /** Whether the accessibility service is actually bound right now. */
+    fun isAccessibilityConnected(): Boolean = AccessibilityBridge.isConnected()
 
     /**
      * Whether the user granted "notification access" (a separate switch from the
@@ -35,8 +41,9 @@ object PermissionUtils {
             context.contentResolver,
             "enabled_notification_listeners",
         ) ?: return false
-        return enabled.split(':').any {
-            ComponentName.unflattenFromString(it) == expected
+        return enabled.split(':').any { entry ->
+            val component = ComponentName.unflattenFromString(entry.trim()) ?: return@any false
+            component.packageName == expected.packageName && component.className == expected.className
         }
     }
 
@@ -49,6 +56,8 @@ object PermissionUtils {
 
     fun status(context: Context) = PermissionStatus(
         accessibilityEnabled = isAccessibilityEnabled(context),
+        accessibilityConnected = isAccessibilityConnected(),
+        notificationListenerEnabled = isNotificationListenerEnabled(context),
         notificationsGranted = hasNotificationPermission(context),
     )
 

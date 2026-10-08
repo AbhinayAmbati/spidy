@@ -121,6 +121,8 @@ fun PermissionCard(
     actionLabel: String,
     onAction: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Shown when [granted] is true but something still needs the user's attention. */
+    warning: String? = null,
 ) {
     GlassCard(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -147,7 +149,17 @@ fun PermissionCard(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.spideyColors.textSecondary,
         )
-        if (!granted) {
+        if (warning != null) {
+            Spacer(Modifier.height(SpideySpacing.sm))
+            Text(
+                text = warning,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.spideyColors.error,
+            )
+        }
+        // The button is hidden only when the permission is genuinely in place. If it is
+        // granted but still not working, the action stays available.
+        if (!granted || warning != null) {
             Spacer(Modifier.height(SpideySpacing.md))
             PrimaryButton(text = actionLabel, onClick = onAction, modifier = Modifier.fillMaxWidth())
         }

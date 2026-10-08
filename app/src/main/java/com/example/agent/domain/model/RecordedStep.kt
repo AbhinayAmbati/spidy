@@ -7,4 +7,5 @@ import kotlinx.serialization.Serializable
 data class RecordedStep(
     val label: String,
     val status: String,
+    val detail: String? = null,
 )

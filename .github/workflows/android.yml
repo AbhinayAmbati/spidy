@@ -29,6 +29,11 @@ jobs:
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
 
+      # Runs before the compiler, because a missing import for one of our own types is
+      # a plain source mistake that costs a full Gradle run to discover otherwise.
+      - name: Check cross-package imports
+        run: python3 tools/check_imports.py app/src
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 

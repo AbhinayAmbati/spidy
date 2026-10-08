@@ -99,17 +99,23 @@ class AccessibilityController {
     // ---------------------------------------------------------------- interaction
 
     suspend fun click(target: TargetMatcher): ActionResult = withContext(Dispatchers.Main) {
-        val node = resolve(target) ?: return@withContext ActionResult.NotFound
-        val clickable = clickableSelfOrAncestor(node) ?: return@withContext ActionResult.NotFound
-        val ok = clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        if (ok) ActionResult.Ok else tapCenter(clickable)
+        // A node captured by an earlier snapshot can go stale once the window changes;
+        // touching one throws IllegalStateException. That must not take down the task.
+        runCatching {
+            val node = resolve(target) ?: return@withContext ActionResult.NotFound
+            val clickable = clickableSelfOrAncestor(node) ?: return@withContext ActionResult.NotFound
+            val ok = clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            if (ok) ActionResult.Ok else tapCenter(clickable)
+        }.getOrDefault(ActionResult.NotFound)
     }
 
     suspend fun longClick(target: TargetMatcher): ActionResult = withContext(Dispatchers.Main) {
-        val node = resolve(target) ?: return@withContext ActionResult.NotFound
-        val clickable = clickableSelfOrAncestor(node) ?: return@withContext ActionResult.NotFound
-        val ok = clickable.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
-        if (ok) ActionResult.Ok else ActionResult.Unsupported
+        runCatching {
+            val node = resolve(target) ?: return@withContext ActionResult.NotFound
+            val clickable = clickableSelfOrAncestor(node) ?: return@withContext ActionResult.NotFound
+            val ok = clickable.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
+            if (ok) ActionResult.Ok else ActionResult.Unsupported
+        }.getOrDefault(ActionResult.NotFound)
     }
 
     suspend fun setText(target: TargetMatcher, text: String): ActionResult = withContext(Dispatchers.Main) {
@@ -258,7 +264,19 @@ class AccessibilityController {
         val root = service?.rootInActiveWindow ?: return null
 
         target.viewId?.let { id ->
-            root.findAccessibilityNodeInfosByViewId(id)?.firstOrNull()?.let { return it }
+            runCatching { root.findAccessibilityNodeInfosByViewId(id)?.firstOrNull() }
+                .getOrNull()?.let { return it }
+
+            // The observation shows the short id ("url_bar") while the platform wants the
+            // fully-qualified one ("com.android.chrome:id/url_bar"). The model echoes back
+            // what it was shown, so accept either form.
+            val short = id.substringAfterLast('/')
+            if (short.isNotBlank()) {
+                lastNodes.firstOrNull { it.viewIdResourceName?.substringAfterLast('/') == short }
+                    ?.let { return it }
+                findFirst(root) { it.viewIdResourceName?.substringAfterLast('/') == short }
+                    ?.let { return it }
+            }
         }
 
         val needles = listOfNotNull(target.text, target.contentDescription)

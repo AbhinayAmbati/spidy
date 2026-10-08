@@ -47,7 +47,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val recent by viewModel.recentTasks.collectAsStateWithLifecycle()
-    val accessibilityEnabled by viewModel.accessibilityEnabled.collectAsStateWithLifecycle()
+    val permissions by viewModel.permissions.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshPermissions() }
@@ -89,12 +89,18 @@ fun HomeScreen(
             },
         )
 
-        if (!accessibilityEnabled) {
+        if (!permissions.accessibilityReady) {
             Spacer(Modifier.height(SpideySpacing.lg))
             PermissionCard(
                 title = "Accessibility access",
                 body = "Spidey needs accessibility to see and control the screen. You can stop it any time.",
                 granted = false,
+                warning = if (permissions.accessibilityStuck) {
+                    "Accessibility is switched on but the service is not connected. Turn it off " +
+                        "and on again in system settings."
+                } else {
+                    null
+                },
                 actionLabel = "Enable accessibility",
                 onAction = { context.startActivity(PermissionUtils.accessibilitySettingsIntent()) },
             )

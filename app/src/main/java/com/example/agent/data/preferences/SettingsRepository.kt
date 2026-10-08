@@ -12,6 +12,7 @@ import com.example.agent.domain.model.AppearanceMode
 import com.example.agent.domain.model.ProviderConfig
 import com.example.agent.domain.model.ProviderType
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -35,7 +36,15 @@ class SettingsRepository(
         val ONBOARDED = booleanPreferencesKey("onboarded")
     }
 
-    val providerConfig: Flow<ProviderConfig> = context.dataStore.data.map { prefs ->
+    /**
+     * Combines settings with the credential store's version counter. The API key lives in
+     * EncryptedSharedPreferences, NOT DataStore, so without that second source this flow
+     * would never re-emit after a key is saved and `hasApiKey` would stay stuck on false.
+     */
+    val providerConfig: Flow<ProviderConfig> = combine(
+        context.dataStore.data,
+        credentials.version,
+    ) { prefs, _ ->
         val type = ProviderType.fromKey(prefs[Keys.PROVIDER])
         ProviderConfig(
             type = type,
@@ -44,6 +53,9 @@ class SettingsRepository(
             hasApiKey = credentials.hasApiKey(type),
         )
     }
+
+    /** Null when encrypted credential storage is healthy; otherwise why it is not. */
+    val credentialStorageError: String? get() = credentials.unavailableReason
 
     suspend fun currentProviderConfig(): ProviderConfig = providerConfig.first()
 

@@ -4,11 +4,14 @@ import com.example.agent.automation.AndroidAutomationManager
 import com.example.agent.automation.observer.ScreenObserver
 import com.example.agent.automation.tools.ToolRegistry
 import com.example.agent.core.ai.AIProvider
+import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AIProviderFactory
 import com.example.agent.data.preferences.SettingsRepository
 import com.example.agent.data.repository.MemoryRepository
 import com.example.agent.data.repository.TaskHistoryRepository
+import com.example.agent.domain.model.ActionTarget
+import com.example.agent.domain.model.AgentAction
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
 import com.example.agent.domain.model.MessageRole
@@ -155,6 +158,7 @@ class AgentRuntime(
             return
         }
 
+        var nudges = 0
         val messages = mutableListOf<AgentMessage>()
         messages += AgentMessage(MessageRole.System, PromptBuilder.systemPrompt(knownApps))
 
@@ -181,13 +185,34 @@ class AgentRuntime(
                 val action = response.action
 
                 if (action == null) {
-                    val summary = response.message?.takeIf { it.isNotBlank() } ?: "Done."
-                    messages += AgentMessage(MessageRole.Assistant, summary)
-                    finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.COMPLETED, summary)
+                    val said = response.message?.takeIf { it.isNotBlank() }
+                    if (said != null) messages += AgentMessage(MessageRole.Assistant, said)
+
+                    // A reply with no tool call is NOT a finished task: completion always
+                    // arrives through the `finish` tool. Reporting the model's prose as a
+                    // successful result was quietly wrong, so nudge it back on track first.
+                    if (nudges < MAX_TEXT_NUDGES) {
+                        nudges++
+                        messages += AgentMessage(
+                            MessageRole.User,
+                            PromptBuilder.observationMessage(
+                                "You replied with text instead of calling a tool. Call exactly " +
+                                    "one tool now — use finish when the task is complete.",
+                            ),
+                        )
+                        trim(messages)
+                        continue
+                    }
+
+                    finish(
+                        taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
+                        "The model kept replying with text instead of acting. That usually means " +
+                            "it doesn't support tool calling — try a different model in Settings.",
+                    )
                     return
                 }
 
-                val label = describe(action.action, action.text, action.packageName, action.target?.text)
+                val label = describe(action)
                 val index = steps.size
                 steps += TaskStep(index, label, StepStatus.Running)
                 _progress.value = _progress.value.copy(
@@ -197,24 +222,50 @@ class AgentRuntime(
                     message = label,
                 )
 
+                // The model's call is recorded as a real tool-call turn, and every result
+                // below is paired back to it by id. It used to be a plain-text
+                // "action: click" line, which the model could not reliably read back.
+                val callId = "call_$step"
+                val callArguments = runCatching {
+                    AgentJson.encodeToString(AgentAction.serializer(), action)
+                }.getOrDefault("{}")
+
+                fun recordCall() {
+                    messages += AgentMessage(
+                        role = MessageRole.Assistant,
+                        content = "",
+                        toolCallId = callId,
+                        name = action.action,
+                        toolArguments = callArguments,
+                    )
+                }
+
+                fun recordResult(text: String) {
+                    messages += AgentMessage(
+                        role = MessageRole.Tool,
+                        content = text,
+                        toolCallId = callId,
+                        name = action.action,
+                    )
+                    trim(messages)
+                }
+
                 when (val outcome = validator.validate(action, step)) {
                     is ActionValidator.Outcome.Rejected -> {
-                        markStep(steps, index, StepStatus.Failed)
-                        messages += AgentMessage(MessageRole.Assistant, "action: ${action.action}")
-                        messages += AgentMessage(
-                            MessageRole.User,
-                            PromptBuilder.observationMessage("That action was not allowed: ${outcome.reason}"),
-                        )
-                        trim(messages)
+                        markStep(steps, index, StepStatus.Failed, outcome.reason)
+                        recordCall()
+                        recordResult("That action was not allowed: ${outcome.reason}")
                         continue
                     }
                     is ActionValidator.Outcome.RequiresConfirmation -> {
                         val allowed = awaitConfirmation(action, outcome.reason)
                         if (!allowed) {
-                            markStep(steps, index, StepStatus.Failed)
-                            messages += AgentMessage(MessageRole.User,
-                                PromptBuilder.observationMessage("The user declined this action."))
-                            trim(messages)
+                            markStep(steps, index, StepStatus.Failed, "You declined this action.")
+                            recordCall()
+                            recordResult(
+                                "The user declined this action. Do not repeat it; try another " +
+                                    "route, or use ask_user if you need a decision.",
+                            )
                             continue
                         }
                     }
@@ -223,7 +274,9 @@ class AgentRuntime(
 
                 val tool = registry.find(action.action)
                 if (tool == null) {
-                    markStep(steps, index, StepStatus.Failed)
+                    markStep(steps, index, StepStatus.Failed, "Unknown tool: ${action.action}")
+                    recordCall()
+                    recordResult("There is no tool called ${action.action}.")
                     continue
                 }
 
@@ -233,12 +286,11 @@ class AgentRuntime(
                 when (result) {
                     is ToolResult.Success -> {
                         markStep(steps, index, StepStatus.Done)
-                        messages += AgentMessage(MessageRole.Assistant, "action: ${action.action}")
+                        recordCall()
                         automation.awaitUiSettled()
                         val next = observer.observe()
                         next.snapshot.packageName?.let { appsUsed.add(it) }
-                        messages += AgentMessage(MessageRole.User, PromptBuilder.observationMessage(next.rendered))
-                        trim(messages)
+                        recordResult(PromptBuilder.observationMessage(next.rendered))
 
                         if (action.action == ToolNames.FINISH) {
                             finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.COMPLETED, result.observation)
@@ -246,18 +298,24 @@ class AgentRuntime(
                         }
                     }
                     is ToolResult.Failure -> {
-                        markStep(steps, index, StepStatus.Failed)
-                        messages += AgentMessage(MessageRole.Assistant, "action: ${action.action}")
-                        messages += AgentMessage(MessageRole.User, PromptBuilder.observationMessage(result.message))
-                        trim(messages)
+                        markStep(steps, index, StepStatus.Failed, result.message)
+                        recordCall()
+                        // The screen is included even on failure. Withholding it left the
+                        // model nothing to reason about, so it stalled and answered with
+                        // prose instead of trying something else.
+                        automation.awaitUiSettled()
+                        val next = observer.observe()
+                        next.snapshot.packageName?.let { appsUsed.add(it) }
+                        recordResult(result.message + "\n\n" + PromptBuilder.observationMessage(next.rendered))
                     }
                     is ToolResult.NeedsConfirmation -> {
                         markStep(steps, index, StepStatus.Done)
+                        recordCall()
                         if (action.action == ToolNames.ASK_USER) {
                             val answer = awaitQuestion(result.prompt)
-                            messages += AgentMessage(MessageRole.User,
-                                PromptBuilder.observationMessage("The user answered: $answer"))
-                            trim(messages)
+                            recordResult("The user answered: $answer")
+                        } else {
+                            recordResult("Waiting for the user to confirm.")
                         }
                     }
                 }
@@ -335,8 +393,13 @@ class AgentRuntime(
         }
     }
 
-    private fun markStep(steps: MutableList<TaskStep>, index: Int, status: StepStatus) {
-        if (index in steps.indices) steps[index] = steps[index].copy(status = status)
+    private fun markStep(
+        steps: MutableList<TaskStep>,
+        index: Int,
+        status: StepStatus,
+        detail: String? = null,
+    ) {
+        if (index in steps.indices) steps[index] = steps[index].copy(status = status, detail = detail)
         _progress.value = _progress.value.copy(steps = steps.toList())
     }
 
@@ -377,7 +440,7 @@ class AgentRuntime(
                 stepCount = stepCount,
                 appsUsed = appsUsed.toList(),
                 summary = message,
-                steps = steps.map { RecordedStep(it.label, it.status.name) },
+                steps = steps.map { RecordedStep(it.label, it.status.name, it.detail) },
             )
         )
     }
@@ -394,35 +457,46 @@ class AgentRuntime(
                 AIProviderException.Kind.RateLimited -> "The provider is rate-limiting requests. Try again shortly."
                 AIProviderException.Kind.Network -> "I couldn't reach the AI provider. Check your connection."
                 AIProviderException.Kind.Server -> detail ?: "The AI provider had a server error. Try again."
-                AIProviderException.Kind.Parse -> "The model returned something I couldn't understand. Try rephrasing."
+                // Providers (and our own parser) usually say exactly what was wrong.
+                // Swallowing that is what made this failure undiagnosable.
+                AIProviderException.Kind.Parse -> detail?.take(300)
+                    ?: "The model returned something I couldn't understand. Try rephrasing."
                 AIProviderException.Kind.Unknown -> detail ?: "Something went wrong talking to the provider."
             }
         }
         else -> "Something went wrong: ${e.message ?: "unknown error"}"
     }
 
-    private fun describe(
-        action: String,
-        text: String?,
-        packageName: String?,
-        targetText: String?,
-    ): String = when (action) {
-        ToolNames.OPEN_APP -> "Opening ${packageName ?: "app"}"
-        ToolNames.READ_SCREEN -> "Reading the screen"
-        ToolNames.FIND_TEXT -> "Looking for " + quoted(text)
-        ToolNames.CLICK -> "Tapping " + quoted(targetText)
-        ToolNames.LONG_CLICK -> "Long-pressing " + quoted(targetText)
-        ToolNames.TYPE_TEXT -> "Typing " + quoted(text?.take(40))
-        ToolNames.SCROLL -> "Scrolling"
-        ToolNames.SWIPE -> "Swiping"
-        ToolNames.PRESS_BACK -> "Going back"
-        ToolNames.PRESS_HOME -> "Going home"
-        ToolNames.WAIT -> "Waiting for the screen"
-        ToolNames.LAUNCH_URL -> "Opening a link"
-        ToolNames.GET_NOTIFICATIONS -> "Reading notifications"
-        ToolNames.ASK_USER -> "Asking you a question"
-        ToolNames.FINISH -> "Finishing up"
-        else -> action.replace('_', ' ')
+    private fun describe(action: com.example.agent.domain.model.AgentAction): String =
+        when (action.action) {
+            ToolNames.OPEN_APP -> "Opening ${action.packageName ?: "app"}"
+            ToolNames.CLOSE_APP -> "Leaving ${action.packageName ?: "the app"}"
+            ToolNames.READ_SCREEN -> "Reading the screen"
+            ToolNames.FIND_TEXT -> "Looking for " + quoted(action.text)
+            ToolNames.CLICK -> "Tapping " + targetLabel(action.target)
+            ToolNames.LONG_CLICK -> "Long-pressing " + targetLabel(action.target)
+            ToolNames.TYPE_TEXT -> "Typing " + quoted(action.text?.take(40))
+            ToolNames.SCROLL -> "Scrolling ${action.direction ?: "forward"}"
+            ToolNames.SWIPE -> "Swiping ${action.direction ?: "up"}"
+            ToolNames.PRESS_BACK -> "Going back"
+            ToolNames.PRESS_HOME -> "Going home"
+            ToolNames.WAIT -> "Waiting for the screen"
+            ToolNames.LAUNCH_URL -> "Opening " + quoted(action.url?.take(60))
+            ToolNames.GET_NOTIFICATIONS -> "Reading notifications"
+            ToolNames.ASK_USER -> "Asking you a question"
+            ToolNames.FINISH -> "Finishing up"
+            else -> action.action.replace('_', ' ')
+        }
+
+    /** Names the target, so a step reads "Tapping "Search"" rather than "Tapping an element". */
+    private fun targetLabel(target: ActionTarget?): String = when {
+        target == null -> "an element"
+        !target.text.isNullOrBlank() -> quoted(target.text)
+        !target.contentDescription.isNullOrBlank() -> quoted(target.contentDescription)
+        target.ref != null -> "element #${target.ref}"
+        !target.viewId.isNullOrBlank() -> "the ${target.viewId.substringAfterLast('/')} field"
+        !target.className.isNullOrBlank() -> "the ${target.className.substringAfterLast('.')} element"
+        else -> "an element"
     }
 
     private fun quoted(value: String?): String =
@@ -431,5 +505,8 @@ class AgentRuntime(
     private companion object {
         /** System + task + this many trailing messages are kept. */
         const val MAX_CONTEXT_MESSAGES = 24
+
+        /** How many times we push the model back towards calling a tool before giving up. */
+        const val MAX_TEXT_NUDGES = 2
     }
 }

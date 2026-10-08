@@ -46,6 +46,12 @@ class ProviderViewModel @Inject constructor(
     private val _testState = MutableStateFlow<TestState>(TestState.Idle)
     val testState: StateFlow<TestState> = _testState.asStateFlow()
 
+    /**
+     * Null when encrypted credential storage is healthy. If the Android Keystore is
+     * unusable on this device, say so plainly instead of letting saves fail silently.
+     */
+    val credentialStorageError: String? = settings.credentialStorageError
+
     init {
         viewModelScope.launch {
             val config = settings.currentProviderConfig()
@@ -91,8 +97,12 @@ class ProviderViewModel @Inject constructor(
 
     fun save() {
         viewModelScope.launch {
-            persist()
-            _testState.value = TestState.Saved
+            try {
+                persist()
+                _testState.value = TestState.Saved
+            } catch (e: Exception) {
+                _testState.value = TestState.Failure(describeSaveFailure(e))
+            }
         }
     }
 
@@ -108,7 +118,12 @@ class ProviderViewModel @Inject constructor(
     fun testConnection() {
         viewModelScope.launch {
             _testState.value = TestState.Testing
-            persist()
+            try {
+                persist()
+            } catch (e: Exception) {
+                _testState.value = TestState.Failure(describeSaveFailure(e))
+                return@launch
+            }
             try {
                 // Reading the key touches EncryptedSharedPreferences (crypto + disk);
                 // keep it off the main thread along with the request itself.
@@ -151,6 +166,12 @@ class ProviderViewModel @Inject constructor(
         }
     }
 
+    private fun describeSaveFailure(e: Exception): String {
+        val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName.orEmpty()
+        return "Could not save the key: $detail"
+    }
+
+    /** @throws Exception when the credential write fails, so the caller can report it. */
     private suspend fun persist() {
         settings.saveProvider(
             type = _selected.value,

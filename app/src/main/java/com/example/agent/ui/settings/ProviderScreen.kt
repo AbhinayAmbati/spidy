@@ -55,6 +55,7 @@ fun ProviderScreen(
     val keyInput by viewModel.keyInput.collectAsStateWithLifecycle()
     val maskedKey by viewModel.maskedKey.collectAsStateWithLifecycle()
     val testState by viewModel.testState.collectAsStateWithLifecycle()
+    val storageError = viewModel.credentialStorageError
 
     Column(
         modifier = Modifier
@@ -76,6 +77,25 @@ fun ProviderScreen(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.spideyColors.textSecondary,
         )
+
+        // If the Android Keystore is unusable on this device, every key save will fail.
+        // Say so up front rather than letting the user wonder why nothing sticks.
+        storageError?.let { reason ->
+            Spacer(Modifier.height(SpideySpacing.md))
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Encrypted storage unavailable",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.spideyColors.error,
+                )
+                Spacer(Modifier.height(SpideySpacing.xs))
+                Text(
+                    text = "API keys cannot be saved on this device: $reason",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.spideyColors.textSecondary,
+                )
+            }
+        }
 
         Spacer(Modifier.height(SpideySpacing.xl))
 

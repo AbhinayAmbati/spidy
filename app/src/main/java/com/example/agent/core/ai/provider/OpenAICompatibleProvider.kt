@@ -1,15 +1,17 @@
 package com.example.agent.core.ai.provider
 
 import com.example.agent.core.ai.AIProvider
+import com.example.agent.core.ai.AgentActionCodec
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AgentToolSpec
-import com.example.agent.domain.model.AgentAction
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
 import com.example.agent.domain.model.MessageRole
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -55,7 +57,9 @@ class OpenAICompatibleProvider(
             put("messages", JsonArray(messages.map { it.toOpenAiMessage() }))
             if (tools.isNotEmpty()) {
                 put("tools", JsonArray(tools.map { it.toOpenAiTool() }))
-                put("tool_choice", "auto")
+                // The agent must always act, never chat. Forcing a tool call is what stops
+                // the model answering with prose and stalling the loop mid-task.
+                put("tool_choice", "required")
             }
         }
 
@@ -71,29 +75,41 @@ class OpenAICompatibleProvider(
     }
 
     private fun parse(raw: String): AgentResponse {
-        val root = runCatching { AgentJson.parseToJsonElement(raw).jsonObject }
-            .getOrElse { throw AIProviderException(AIProviderException.Kind.Parse, "Malformed provider response") }
+        // Safe casts throughout. The throwing accessors (jsonObject/jsonArray/jsonPrimitive)
+        // blow up on any unexpected type — including a JSON null — and that exception used
+        // to escape as "element class ... is not a JsonArray" on an otherwise fine response.
+        val root = runCatching { AgentJson.parseToJsonElement(raw) as? JsonObject }.getOrNull()
+            ?: throw AIProviderException(
+                AIProviderException.Kind.Parse,
+                "The provider did not return a JSON object: ${raw.take(200)}",
+            )
 
-        val message = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject
-            ?: throw AIProviderException(AIProviderException.Kind.Parse, "Provider returned no choices")
+        val choices = root["choices"] as? JsonArray
+            ?: throw AIProviderException(
+                AIProviderException.Kind.Parse,
+                "The provider's response had no choices array: ${raw.take(200)}",
+            )
 
-        val toolCall = message["tool_calls"]?.jsonArray?.firstOrNull()?.jsonObject
-        val arguments = toolCall?.get("function")?.jsonObject?.get("arguments")?.jsonPrimitive?.content
+        val message = (choices.firstOrNull() as? JsonObject)?.get("message") as? JsonObject
+            ?: throw AIProviderException(
+                AIProviderException.Kind.Parse,
+                "The provider's response had no message: ${raw.take(200)}",
+            )
 
-        if (!arguments.isNullOrBlank()) {
-            val action = runCatching { AgentJson.decodeFromString(AgentAction.serializer(), arguments) }
-                .getOrElse {
-                    throw AIProviderException(
-                        AIProviderException.Kind.Parse,
-                        "Model returned an action that did not match the schema",
-                    )
-                }
-            return AgentResponse(action = action, raw = raw)
+        val toolCall = (message["tool_calls"] as? JsonArray)?.firstOrNull() as? JsonObject
+        val function = toolCall?.get("function") as? JsonObject
+        val toolName = (function?.get("name") as? JsonPrimitive)?.content
+        val arguments = when (val el = function?.get("arguments")) {
+            is JsonPrimitive -> el.content
+            is JsonObject -> el.toString() // a few gateways send an object, not a string
+            else -> null
         }
 
-        val content = message["content"]?.let { el ->
-            runCatching { el.jsonPrimitive.content }.getOrNull()
+        AgentActionCodec.fromToolCallJson(toolName, arguments)?.let {
+            return AgentResponse(action = it, raw = raw)
         }
+
+        val content = (message["content"] as? JsonPrimitive)?.content
         return AgentResponse(message = content, raw = raw)
     }
 
@@ -155,10 +171,33 @@ class OpenAICompatibleProvider(
 internal fun AgentMessage.toOpenAiMessage(): JsonObject = buildJsonObject {
     put("role", when (role) {
         MessageRole.System -> "system"
-        MessageRole.User, MessageRole.Tool -> "user"
+        MessageRole.User -> "user"
+        MessageRole.Tool -> "tool"
         MessageRole.Assistant -> "assistant"
     })
-    put("content", content)
+
+    when {
+        // A tool result must name the call it answers, or the model cannot pair the two.
+        role == MessageRole.Tool -> {
+            put("tool_call_id", toolCallId.orEmpty())
+            put("content", content)
+        }
+
+        // Replay the model's own call verbatim so its history reads as real tool use.
+        role == MessageRole.Assistant && name != null && toolCallId != null -> {
+            put("content", if (content.isBlank()) JsonNull else JsonPrimitive(content))
+            put("tool_calls", JsonArray(listOf(buildJsonObject {
+                put("id", toolCallId)
+                put("type", "function")
+                put("function", buildJsonObject {
+                    put("name", name)
+                    put("arguments", toolArguments ?: "{}")
+                })
+            })))
+        }
+
+        else -> put("content", content)
+    }
 }
 
 internal fun AgentToolSpec.toOpenAiTool(): JsonObject = buildJsonObject {

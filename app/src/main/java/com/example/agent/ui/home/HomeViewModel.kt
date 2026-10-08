@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.agent.automation.AgentForegroundService
 import com.example.agent.core.agent.AgentRuntime
+import com.example.agent.core.permissions.PermissionStatus
 import com.example.agent.core.permissions.PermissionUtils
 import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.TaskProgress
@@ -29,11 +30,11 @@ class HomeViewModel @Inject constructor(
     val recentTasks: StateFlow<List<TaskRecord>> = history.observeRecent(3)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _accessibilityEnabled = MutableStateFlow(PermissionUtils.isAccessibilityEnabled(context))
-    val accessibilityEnabled: StateFlow<Boolean> = _accessibilityEnabled
+    private val _permissions = MutableStateFlow(PermissionUtils.status(context))
+    val permissions: StateFlow<PermissionStatus> = _permissions
 
     fun refreshPermissions() {
-        _accessibilityEnabled.value = PermissionUtils.isAccessibilityEnabled(context)
+        _permissions.value = PermissionUtils.status(context)
     }
 
     fun submit(prompt: String) {

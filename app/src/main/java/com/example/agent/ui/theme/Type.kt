@@ -67,6 +67,7 @@ val SpideyTypography = Typography(
     titleMedium = ui(18, 26, FontWeight.Medium),
     bodyLarge = ui(17, 26, FontWeight.Normal),
     bodyMedium = ui(15, 23, FontWeight.Normal),
+    bodySmall = ui(13, 18, FontWeight.Normal),
     labelLarge = ui(15, 20, FontWeight.Medium),
     labelMedium = ui(14, 20, FontWeight.Medium, 0.1),
     labelSmall = ui(13, 18, FontWeight.Medium, 0.2),

@@ -43,17 +43,14 @@ import com.example.agent.ui.theme.spideyColors
 fun OnboardingScreen(onDone: () -> Unit) {
     val context = LocalContext.current
 
-    var accessibilityEnabled by remember {
-        mutableStateOf(PermissionUtils.isAccessibilityEnabled(context))
-    }
-    var notificationsEnabled by remember {
-        mutableStateOf(PermissionUtils.isNotificationListenerEnabled(context))
-    }
+    var status by remember { mutableStateOf(PermissionUtils.status(context)) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        accessibilityEnabled = PermissionUtils.isAccessibilityEnabled(context)
-        notificationsEnabled = PermissionUtils.isNotificationListenerEnabled(context)
+        status = PermissionUtils.status(context)
     }
+
+    val accessibilityReady = status.accessibilityReady
+    val notificationsEnabled = status.notificationListenerEnabled
 
     Column(
         modifier = Modifier
@@ -110,7 +107,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             PermissionHeader(
                 title = "Accessibility",
-                granted = accessibilityEnabled,
+                granted = accessibilityReady,
                 required = true,
             )
             Spacer(Modifier.height(SpideySpacing.xs))
@@ -119,7 +116,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.spideyColors.textSecondary,
             )
-            if (!accessibilityEnabled) {
+            if (!accessibilityReady) {
                 Spacer(Modifier.height(SpideySpacing.md))
                 PrimaryButton(
                     text = stringResource(R.string.onboarding_enable),
@@ -158,7 +155,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
         Spacer(Modifier.height(SpideySpacing.xl))
 
         SecondaryButton(
-            text = if (accessibilityEnabled) "Done" else "Maybe later",
+            text = if (accessibilityReady) "Done" else "Maybe later",
             onClick = onDone,
             modifier = Modifier.fillMaxWidth(),
         )

@@ -50,9 +50,14 @@
 
         <!-- The accessibility service is the ONLY component that can observe and
              interact with other apps' UIs. It is declared here and bound by the OS. -->
+        <!--
+          exported="true" is required: this service is bound by system_server, a different
+          UID. Access is still gated by BIND_ACCESSIBILITY_SERVICE, which is signature-level
+          and held only by the system.
+        -->
         <service
             android:name=".automation.accessibility.SpideyAccessibilityService"
-            android:exported="false"
+            android:exported="true"
             android:label="@string/accessibility_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
@@ -64,9 +69,10 @@
         </service>
 
         <!-- Optional: lets the agent read notifications, with separate user consent. -->
+        <!-- Same reasoning as above: bound by the system, gated by its signature permission. -->
         <service
             android:name=".automation.accessibility.SpideyNotificationListenerService"
-            android:exported="false"
+            android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>

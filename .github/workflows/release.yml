@@ -87,6 +87,11 @@ jobs:
           } > keystore.properties
           chmod 600 keystore.properties
 
+      # Runs before the compiler: a missing import for one of our own types is a plain
+      # source mistake, and a release build should never be the thing that finds it.
+      - name: Check cross-package imports
+        run: python3 tools/check_imports.py app/src
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 

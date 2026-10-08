@@ -33,6 +33,10 @@ class ScreenObserver(private val automation: AndroidAutomationManager) {
             }.joinToString(",")
             sb.append("  [").append(el.ref).append("] ")
                 .append("\"").append(el.label.take(80)).append("\"")
+            // The widget type matters: an EditText is typeable, a TextView is not.
+            el.className?.substringAfterLast('.')?.takeIf { it.isNotBlank() }?.let {
+                sb.append(" <").append(it).append(">")
+            }
             if (flags.isNotEmpty()) sb.append(" (").append(flags).append(")")
             el.id?.let { sb.append(" id=").append(it.substringAfterLast('/')) }
             sb.append('\n')

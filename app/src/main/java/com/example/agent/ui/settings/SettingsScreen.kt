@@ -49,8 +49,7 @@ fun SettingsScreen(
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
     val provider by viewModel.providerConfig.collectAsStateWithLifecycle()
     val memory by viewModel.memoryEnabled.collectAsStateWithLifecycle()
-    val accessibility by viewModel.accessibilityEnabled.collectAsStateWithLifecycle()
-    val notifications by viewModel.notificationsGranted.collectAsStateWithLifecycle()
+    val permissions by viewModel.permissions.collectAsStateWithLifecycle()
 
     // Accessibility and notification access are granted in *system* settings, so
     // re-read on resume. A one-shot LaunchedEffect(Unit) never re-runs when the
@@ -93,7 +92,13 @@ fun SettingsScreen(
         PermissionCard(
             title = "Accessibility",
             body = "Required so the agent can see and control the screen. You can stop it any time.",
-            granted = accessibility,
+            granted = permissions.accessibilityReady,
+            warning = if (permissions.accessibilityStuck) {
+                "Accessibility is switched on but the service is not connected. Turn it off " +
+                    "and on again in system settings."
+            } else {
+                null
+            },
             actionLabel = stringResource(R.string.onboarding_enable),
             onAction = { context.startActivity(PermissionUtils.accessibilitySettingsIntent()) },
         )
@@ -101,7 +106,7 @@ fun SettingsScreen(
         PermissionCard(
             title = "Notifications",
             body = "Used to show the agent's progress while it works and to read notifications if you allow it.",
-            granted = notifications,
+            granted = permissions.notificationListenerEnabled,
             actionLabel = "Open notification settings",
             onAction = { context.startActivity(PermissionUtils.notificationListenerSettingsIntent()) },
         )

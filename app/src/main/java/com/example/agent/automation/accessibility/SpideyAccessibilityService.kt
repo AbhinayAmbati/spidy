@@ -10,19 +10,29 @@ import kotlinx.coroutines.flow.asSharedFlow
  * The single AccessibilityService in the app.
  *
  * It does nothing clever on its own — it exposes a live connection to
- * [AccessibilityController] via [AccessibilityBridge] and broadcasts a coarse
- * "something changed" signal so the agent can wait for the UI to settle.
+ * [AccessibilityController] via [AccessibilityBridge] and records a coarse
+ * "something changed" signal.
+ *
+ * Everything here is defensive on purpose. Android treats an accessibility service that
+ * throws as malfunctioning and disables it, so a bug in our code must never be allowed
+ * to escape a callback.
  */
 class SpideyAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
-        super.onServiceConnected()
         AccessibilityBridge.attach(this)
+        super.onServiceConnected()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val pkg = event?.packageName?.toString()
-        AccessibilityBridge.notifyEvent(pkg, event?.eventType ?: 0)
+        // This fires very often. Nothing consumes the signal today (the observer polls
+        // instead), so it only records the last event — deliberately cheap.
+        runCatching {
+            AccessibilityBridge.notifyEvent(
+                packageName = event?.packageName?.toString(),
+                eventType = event?.eventType ?: 0,
+            )
+        }
     }
 
     override fun onInterrupt() {
@@ -50,7 +60,7 @@ object AccessibilityBridge {
     @Volatile
     private var service: SpideyAccessibilityService? = null
 
-    private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 64)
+    private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
 
     data class UiEvent(val packageName: String?, val eventType: Int, val atMillis: Long)

@@ -1,15 +1,17 @@
 package com.example.agent.core.ai.provider
 
 import com.example.agent.core.ai.AIProvider
+import com.example.agent.core.ai.AgentActionCodec
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AgentToolSpec
-import com.example.agent.domain.model.AgentAction
+import com.example.agent.core.ai.parseObjectOrEmpty
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
 import com.example.agent.domain.model.MessageRole
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -55,6 +57,10 @@ class GeminiProvider(
                 put("tools", JsonArray(listOf(buildJsonObject {
                     put("functionDeclarations", JsonArray(tools.map { it.toGeminiFunction() }))
                 })))
+                // Force a function call: the agent must act, never chat.
+                put("toolConfig", buildJsonObject {
+                    put("functionCallingConfig", buildJsonObject { put("mode", "ANY") })
+                })
             }
             put("generationConfig", buildJsonObject { put("temperature", 0) })
         }
@@ -76,31 +82,26 @@ class GeminiProvider(
     }
 
     private fun parse(raw: String): AgentResponse {
-        val root = runCatching { AgentJson.parseToJsonElement(raw).jsonObject }
-            .getOrElse { throw AIProviderException(AIProviderException.Kind.Parse, "Malformed provider response") }
+        val root = runCatching { AgentJson.parseToJsonElement(raw) as? JsonObject }.getOrNull()
+            ?: return AgentResponse(message = null, raw = raw)
 
-        val parts = root["candidates"]?.jsonArray?.firstOrNull()?.jsonObject
-            ?.get("content")?.jsonObject?.get("parts")?.jsonArray
+        val candidates = root["candidates"] as? JsonArray
+            ?: return AgentResponse(message = null, raw = raw)
+        val contentObj = (candidates.firstOrNull() as? JsonObject)?.get("content") as? JsonObject
+        val parts = contentObj?.get("parts") as? JsonArray
             ?: return AgentResponse(message = null, raw = raw)
 
         var text: String? = null
         for (part in parts) {
-            val obj = part.jsonObject
-            obj["functionCall"]?.jsonObject?.let { call ->
-                val args = call["args"]?.jsonObject
-                if (args != null) {
-                    val action = runCatching {
-                        AgentJson.decodeFromJsonElement(AgentAction.serializer(), args)
-                    }.getOrElse {
-                        throw AIProviderException(
-                            AIProviderException.Kind.Parse,
-                            "Model returned an action that did not match the schema",
-                        )
-                    }
-                    return AgentResponse(action = action, raw = raw)
+            val obj = part as? JsonObject ?: continue
+            (obj["functionCall"] as? JsonObject)?.let { call ->
+                val name = (call["name"] as? JsonPrimitive)?.content
+                val args = call["args"] as? JsonObject
+                AgentActionCodec.fromToolCall(name, args)?.let {
+                    return AgentResponse(action = it, raw = raw)
                 }
             }
-            obj["text"]?.jsonPrimitive?.content?.let { text = it }
+            (obj["text"] as? JsonPrimitive)?.content?.let { text = it }
         }
         return AgentResponse(message = text, raw = raw)
     }
@@ -130,9 +131,40 @@ class GeminiProvider(
     }
 }
 
-private fun AgentMessage.toGeminiContent(): JsonObject = buildJsonObject {
-    put("role", if (role == MessageRole.Assistant) "model" else "user")
-    put("parts", JsonArray(listOf(buildJsonObject { put("text", content) })))
+internal fun AgentMessage.toGeminiContent(): JsonObject = buildJsonObject {
+    when {
+        role == MessageRole.Assistant -> {
+            put("role", "model")
+            val parts = buildList {
+                if (content.isNotBlank()) add(buildJsonObject { put("text", content) })
+                if (name != null) add(buildJsonObject {
+                    put("functionCall", buildJsonObject {
+                        put("name", name)
+                        put("args", parseObjectOrEmpty(toolArguments))
+                    })
+                })
+            }
+            put("parts", JsonArray(
+                if (parts.isEmpty()) listOf(buildJsonObject { put("text", "") }) else parts,
+            ))
+        }
+
+        // Gemini pairs a result with its call by function *name*, inside a user turn.
+        role == MessageRole.Tool -> {
+            put("role", "user")
+            put("parts", JsonArray(listOf(buildJsonObject {
+                put("functionResponse", buildJsonObject {
+                    put("name", name ?: "tool")
+                    put("response", buildJsonObject { put("result", content) })
+                })
+            })))
+        }
+
+        else -> {
+            put("role", "user")
+            put("parts", JsonArray(listOf(buildJsonObject { put("text", content) })))
+        }
+    }
 }
 
 private fun AgentToolSpec.toGeminiFunction(): JsonObject = buildJsonObject {

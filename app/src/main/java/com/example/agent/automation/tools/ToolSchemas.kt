@@ -7,7 +7,7 @@ object ToolSchemas {
          "properties":{
            "text":{"type":"string","description":"Visible text of the element"},
            "contentDescription":{"type":"string","description":"Accessibility description"},
-           "viewId":{"type":"string","description":"Resource id, e.g. com.android.chrome:id/url_bar"},
+           "viewId":{"type":"string","description":"Resource id from the observation, e.g. url_bar"},
            "ref":{"type":"integer","description":"Element index from the latest screen observation"},
            "className":{"type":"string","description":"Widget class name"}
          }}

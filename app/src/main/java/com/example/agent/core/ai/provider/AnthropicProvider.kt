@@ -1,15 +1,17 @@
 package com.example.agent.core.ai.provider
 
 import com.example.agent.core.ai.AIProvider
+import com.example.agent.core.ai.AgentActionCodec
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AgentToolSpec
-import com.example.agent.domain.model.AgentAction
+import com.example.agent.core.ai.parseObjectOrEmpty
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
 import com.example.agent.domain.model.MessageRole
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -54,6 +56,8 @@ class AnthropicProvider(
             ))
             if (tools.isNotEmpty()) {
                 put("tools", JsonArray(tools.map { it.toAnthropicTool() }))
+                // Force a tool call: the agent must act, never chat.
+                put("tool_choice", buildJsonObject { put("type", "any") })
             }
         }
 
@@ -75,27 +79,20 @@ class AnthropicProvider(
     }
 
     private fun parse(raw: String): AgentResponse {
-        val root = runCatching { AgentJson.parseToJsonElement(raw).jsonObject }
-            .getOrElse { throw AIProviderException(AIProviderException.Kind.Parse, "Malformed provider response") }
+        val root = runCatching { AgentJson.parseToJsonElement(raw) as? JsonObject }.getOrNull()
+            ?: return AgentResponse(message = null, raw = raw)
 
-        val blocks = root["content"]?.jsonArray ?: return AgentResponse(message = null, raw = raw)
+        val blocks = root["content"] as? JsonArray ?: return AgentResponse(message = null, raw = raw)
         var text: String? = null
         for (block in blocks) {
-            val obj = block.jsonObject
-            when (obj["type"]?.jsonPrimitive?.content) {
-                "text" -> text = obj["text"]?.jsonPrimitive?.content
+            val obj = block as? JsonObject ?: continue
+            when ((obj["type"] as? JsonPrimitive)?.content) {
+                "text" -> text = (obj["text"] as? JsonPrimitive)?.content
                 "tool_use" -> {
-                    val input = obj["input"]?.jsonObject
-                    if (input != null) {
-                        val action = runCatching {
-                            AgentJson.decodeFromJsonElement(AgentAction.serializer(), input)
-                        }.getOrElse {
-                            throw AIProviderException(
-                                AIProviderException.Kind.Parse,
-                                "Model returned an action that did not match the schema",
-                            )
-                        }
-                        return AgentResponse(action = action, raw = raw)
+                    val name = (obj["name"] as? JsonPrimitive)?.content
+                    val input = obj["input"] as? JsonObject
+                    AgentActionCodec.fromToolCall(name, input)?.let {
+                        return AgentResponse(action = it, raw = raw)
                     }
                 }
             }
@@ -128,9 +125,44 @@ class AnthropicProvider(
     }
 }
 
-private fun AgentMessage.toAnthropicMessage(): JsonObject = buildJsonObject {
-    put("role", if (role == MessageRole.Assistant) "assistant" else "user")
-    put("content", content)
+internal fun AgentMessage.toAnthropicMessage(): JsonObject = buildJsonObject {
+    when {
+        role == MessageRole.Assistant -> {
+            put("role", "assistant")
+            val blocks = buildList {
+                if (content.isNotBlank()) {
+                    add(buildJsonObject { put("type", "text"); put("text", content) })
+                }
+                if (name != null && toolCallId != null) {
+                    add(buildJsonObject {
+                        put("type", "tool_use")
+                        put("id", toolCallId)
+                        put("name", name)
+                        put("input", parseObjectOrEmpty(toolArguments))
+                    })
+                }
+            }
+            put("content", JsonArray(
+                if (blocks.isEmpty()) listOf(buildJsonObject { put("type", "text"); put("text", "") })
+                else blocks,
+            ))
+        }
+
+        // Anthropic delivers tool results inside a *user* turn, not a "tool" role.
+        role == MessageRole.Tool -> {
+            put("role", "user")
+            put("content", JsonArray(listOf(buildJsonObject {
+                put("type", "tool_result")
+                put("tool_use_id", toolCallId.orEmpty())
+                put("content", content)
+            })))
+        }
+
+        else -> {
+            put("role", "user")
+            put("content", content)
+        }
+    }
 }
 
 private fun AgentToolSpec.toAnthropicTool(): JsonObject = buildJsonObject {

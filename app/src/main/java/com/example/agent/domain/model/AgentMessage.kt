@@ -9,8 +9,12 @@ enum class MessageRole { System, User, Assistant, Tool }
 data class AgentMessage(
     val role: MessageRole,
     val content: String,
+    /** Set on an assistant tool-call turn and on the matching tool-result turn. */
     val toolCallId: String? = null,
+    /** Tool name for an assistant tool-call turn, or the tool that produced a result. */
     val name: String? = null,
+    /** Raw JSON arguments the model produced, replayed back to it as its own call. */
+    val toolArguments: String? = null,
 )
 
 /** What a provider hands back: either a tool call, a plain reply, or both. */

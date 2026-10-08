@@ -170,6 +170,22 @@ fun TaskScreen(
 
 @Composable
 private fun StepRow(step: com.example.agent.domain.model.TaskStep) {
+    Column {
+        StepRowContent(step)
+        // A failed step used to be a bare red cross. Say why it failed.
+        step.detail?.takeIf { it.isNotBlank() && step.status == StepStatus.Failed }?.let { detail ->
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.spideyColors.textSecondary,
+                modifier = Modifier.padding(start = 26.dp, top = 2.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StepRowContent(step: com.example.agent.domain.model.TaskStep) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         when (step.status) {
             StepStatus.Done -> Icon(
