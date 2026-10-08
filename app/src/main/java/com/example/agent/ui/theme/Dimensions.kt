@@ -19,18 +19,27 @@ object SpideySpacing {
     val huge: Dp = 64.dp
 
     /** Standard horizontal screen gutter. */
-    val screenGutter: Dp = 24.dp
+    val screenGutter: Dp = 20.dp
 
     /** Default vertical gap between major sections. */
-    val sectionGap: Dp = 32.dp
+    val sectionGap: Dp = 28.dp
 
-    /** Minimum accessible touch target (Android guidance is 48dp). */
-    val minTouchTarget: Dp = 48.dp
+    /**
+     * Visual height for buttons and select fields. Material's own default is 40dp;
+     * keeping it here stops individual controls drifting larger than the rest.
+     */
+    val controlHeight: Dp = 40.dp
+
+    /** Default inset inside a card. */
+    val cardPadding: Dp = 18.dp
+
+    /** Minimum tap target. 44dp keeps controls comfortable without bulk. */
+    val minTouchTarget: Dp = 44.dp
 }
 
 object SpideyElevation {
     val flat: Dp = 0.dp
-    val soft: Dp = 2.dp
-    val raised: Dp = 6.dp
-    val floating: Dp = 12.dp
+    val soft: Dp = 1.dp
+    val raised: Dp = 3.dp
+    val floating: Dp = 6.dp
 }

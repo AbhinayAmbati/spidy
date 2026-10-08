@@ -2,63 +2,72 @@ package com.example.agent.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.example.agent.R
 
 /*
- * Clean system sans-serif (Roboto on Android). Hierarchy is generous:
- *  - Display  32–36sp
- *  - Title    24–28sp
- *  - Section  18–20sp
- *  - Body     15–17sp
- *  - Meta     13–14sp
+ * Two faces, deliberately split by role:
+ *
+ *   Headings      Instrument Serif  — display + headline styles
+ *   Body / UI     Inter             — titles, body, labels, buttons
+ *
+ * Inter is bundled as static instances (400/500/600) rather than the variable
+ * font, so weights resolve exactly without relying on experimental variation APIs.
  */
-private val Sans = FontFamily.SansSerif
+
+/** Body/UI face. */
+val Inter = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+)
+
+/** Heading face. Instrument Serif ships a single weight. */
+val InstrumentSerif = FontFamily(
+    Font(R.font.instrument_serif_regular, FontWeight.Normal),
+)
+
+private fun heading(
+    size: Int,
+    lineHeight: Int,
+    letterSpacing: Double = 0.0,
+) = TextStyle(
+    fontFamily = InstrumentSerif,
+    fontWeight = FontWeight.Normal,
+    fontSize = size.sp,
+    lineHeight = lineHeight.sp,
+    letterSpacing = letterSpacing.sp,
+)
+
+private fun ui(
+    size: Int,
+    lineHeight: Int,
+    weight: FontWeight,
+    letterSpacing: Double = 0.0,
+) = TextStyle(
+    fontFamily = Inter,
+    fontWeight = weight,
+    fontSize = size.sp,
+    lineHeight = lineHeight.sp,
+    letterSpacing = letterSpacing.sp,
+)
 
 val SpideyTypography = Typography(
-    displayLarge = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.SemiBold,
-        fontSize = 36.sp, lineHeight = 44.sp, letterSpacing = (-0.5).sp,
-    ),
-    displayMedium = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.SemiBold,
-        fontSize = 32.sp, lineHeight = 40.sp, letterSpacing = (-0.5).sp,
-    ),
-    headlineMedium = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.SemiBold,
-        fontSize = 28.sp, lineHeight = 36.sp, letterSpacing = (-0.3).sp,
-    ),
-    headlineSmall = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp, lineHeight = 32.sp,
-    ),
-    titleLarge = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.SemiBold,
-        fontSize = 20.sp, lineHeight = 28.sp,
-    ),
-    titleMedium = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.Medium,
-        fontSize = 18.sp, lineHeight = 26.sp,
-    ),
-    bodyLarge = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.Normal,
-        fontSize = 17.sp, lineHeight = 26.sp,
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.Normal,
-        fontSize = 15.sp, lineHeight = 23.sp,
-    ),
-    labelLarge = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.Medium,
-        fontSize = 15.sp, lineHeight = 20.sp,
-    ),
-    labelMedium = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.Medium,
-        fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.2.sp,
-    ),
-    labelSmall = TextStyle(
-        fontFamily = Sans, fontWeight = FontWeight.Medium,
-        fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.4.sp,
-    ),
+    // ---- Headings: Instrument Serif ----
+    displayLarge = heading(36, 44, -0.25),
+    displayMedium = heading(32, 40, -0.25),
+    headlineMedium = heading(28, 36),
+    headlineSmall = heading(24, 32),
+
+    // ---- Body / UI: Inter ----
+    titleLarge = ui(20, 28, FontWeight.SemiBold),
+    titleMedium = ui(18, 26, FontWeight.Medium),
+    bodyLarge = ui(17, 26, FontWeight.Normal),
+    bodyMedium = ui(15, 23, FontWeight.Normal),
+    labelLarge = ui(15, 20, FontWeight.Medium),
+    labelMedium = ui(14, 20, FontWeight.Medium, 0.1),
+    labelSmall = ui(13, 18, FontWeight.Medium, 0.2),
 )

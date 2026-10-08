@@ -17,7 +17,7 @@ val LightTextSecondary = Color(0xFF6B6B67)
 val LightBorder = Color(0xFFE5E3DE)
 val LightBrownAccent = Color(0xFF8B5E3C)
 val LightBrownDark = Color(0xFF5C3D2E)
-val LightGlass = Color(0xA6FFFFFF) // rgba(255,255,255,0.65)
+val LightGlass = Color(0xD9FFFFFF) // rgba(255,255,255,0.85)
 
 // Dark theme
 val DarkBackground = Color(0xFF0D0D0D)

@@ -1,6 +1,8 @@
 package com.example.agent.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,18 +12,30 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.agent.R
 import com.example.agent.domain.model.ProviderType
+import com.example.agent.ui.components.GlassCard
 import com.example.agent.ui.components.PrimaryButton
 import com.example.agent.ui.components.ProviderCard
 import com.example.agent.ui.components.SecondaryButton
@@ -36,6 +50,7 @@ fun ProviderScreen(
 ) {
     val selected by viewModel.selected.collectAsStateWithLifecycle()
     val model by viewModel.model.collectAsStateWithLifecycle()
+    val customModel by viewModel.customModel.collectAsStateWithLifecycle()
     val baseUrl by viewModel.baseUrl.collectAsStateWithLifecycle()
     val keyInput by viewModel.keyInput.collectAsStateWithLifecycle()
     val maskedKey by viewModel.maskedKey.collectAsStateWithLifecycle()
@@ -68,6 +83,7 @@ fun ProviderScreen(
             ProviderType.entries.forEach { type ->
                 ProviderCard(
                     name = type.displayName,
+                    iconRes = type.iconRes(),
                     subtitle = type.defaultBaseUrl.ifBlank { "Custom endpoint" },
                     selected = type == selected,
                     onClick = { viewModel.select(type) },
@@ -77,16 +93,31 @@ fun ProviderScreen(
 
         Spacer(Modifier.height(SpideySpacing.sectionGap))
 
-        SectionHeader(title = "Model")
-        Spacer(Modifier.height(SpideySpacing.sm))
-        OutlinedTextField(
-            value = model,
-            onValueChange = viewModel::setModel,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            placeholder = { Text(selected.defaultModel) },
-            shape = MaterialTheme.shapes.medium,
+        SectionHeader(
+            title = "Model",
+            subtitle = "Pick a suggestion, or choose Custom to type any model id.",
         )
+        Spacer(Modifier.height(SpideySpacing.sm))
+
+        ModelPicker(
+            selected = selected,
+            model = model,
+            customModel = customModel,
+            onPick = viewModel::selectModel,
+            onPickCustom = viewModel::chooseCustomModel,
+        )
+
+        if (customModel) {
+            Spacer(Modifier.height(SpideySpacing.md))
+            OutlinedTextField(
+                value = model,
+                onValueChange = viewModel::setModel,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("e.g. gpt-4o-2024-11-20") },
+                shape = MaterialTheme.shapes.medium,
+            )
+        }
 
         if (selected == ProviderType.CUSTOM) {
             Spacer(Modifier.height(SpideySpacing.md))
@@ -157,6 +188,71 @@ fun ProviderScreen(
         }
         statusText?.let {
             Text(text = it, style = MaterialTheme.typography.bodyMedium, color = statusColor)
+        }
+    }
+}
+
+/**
+ * A read-only select field with a dropdown. Uses the stable DropdownMenu rather than
+ * the experimental exposed-dropdown container.
+ */
+@Composable
+private fun ModelPicker(
+    selected: ProviderType,
+    model: String,
+    customModel: Boolean,
+    onPick: (String) -> Unit,
+    onPickCustom: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val suggestions = selected.suggestedModels
+
+    Box {
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button) { open = true },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = SpideySpacing.md,
+                vertical = SpideySpacing.sm,
+            ),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = when {
+                        customModel -> "Custom model"
+                        model.isBlank() -> "Choose a model"
+                        else -> model
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = "Choose a model",
+                    tint = MaterialTheme.spideyColors.textSecondary,
+                )
+            }
+        }
+
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            suggestions.forEach { suggestion ->
+                DropdownMenuItem(
+                    text = { Text(suggestion, style = MaterialTheme.typography.bodyMedium) },
+                    onClick = {
+                        onPick(suggestion)
+                        open = false
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Custom model…", style = MaterialTheme.typography.bodyMedium) },
+                onClick = {
+                    onPickCustom()
+                    open = false
+                },
+            )
         }
     }
 }

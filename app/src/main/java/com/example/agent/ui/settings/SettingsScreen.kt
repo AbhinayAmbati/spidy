@@ -24,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.agent.BuildConfig
 import com.example.agent.R
 import com.example.agent.core.permissions.PermissionUtils
 import com.example.agent.domain.model.AppearanceMode
@@ -40,6 +41,7 @@ fun SettingsScreen(
     onOpenProvider: () -> Unit,
     onOpenOnboarding: () -> Unit,
     onOpenMemory: () -> Unit,
+    onOpenTerms: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -152,11 +154,34 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(SpideySpacing.sectionGap))
 
+        SectionHeader(title = "Legal")
+        Spacer(Modifier.height(SpideySpacing.md))
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClick = onOpenTerms),
+        ) {
+            Column {
+                Text(
+                    text = "Terms of Service",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "Liability, acceptable use and your responsibilities.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.spideyColors.textSecondary,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(SpideySpacing.sectionGap))
+
         SectionHeader(title = stringResource(R.string.settings_about))
         Spacer(Modifier.height(SpideySpacing.md))
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "Spidey 0.1.0 — an on-device agent that acts through Android's official APIs.",
+                text = "Spidey ${BuildConfig.VERSION_NAME} — an on-device agent that acts through Android's official APIs.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.spideyColors.textSecondary,
             )

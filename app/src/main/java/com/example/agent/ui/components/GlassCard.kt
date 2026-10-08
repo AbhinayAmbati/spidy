@@ -26,8 +26,8 @@ import com.example.agent.ui.theme.spideyColors
 fun GlassCard(
     modifier: Modifier = Modifier,
     shape: Shape = MaterialTheme.shapes.large,
-    elevation: Dp = SpideyElevation.soft,
-    contentPadding: PaddingValues = PaddingValues(SpideySpacing.lg),
+    elevation: Dp = SpideyElevation.flat,
+    contentPadding: PaddingValues = PaddingValues(SpideySpacing.cardPadding),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = MaterialTheme.spideyColors

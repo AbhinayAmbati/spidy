@@ -66,7 +66,7 @@ fun SplashScreen(onFinished: () -> Unit) {
 
     LaunchedEffect(Unit) {
         started = true
-        delay(if (motion) 1500 else 700)
+        delay(if (motion) 2600 else 1200)
         onFinished()
     }
 
@@ -88,7 +88,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                 fontFamily = FontFamily.Cursive,
                 fontWeight = FontWeight.Normal,
                 fontSize = 76.sp,
-                color = SpideyRed,
+                color = androidx.compose.ui.graphics.Color.White,
                 textAlign = TextAlign.Center,
             )
 

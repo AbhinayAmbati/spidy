@@ -31,6 +31,10 @@ class ProviderViewModel @Inject constructor(
     private val _baseUrl = MutableStateFlow(ProviderType.OPENAI.defaultBaseUrl)
     val baseUrl: StateFlow<String> = _baseUrl.asStateFlow()
 
+    /** True when the user is typing a model name instead of picking a suggestion. */
+    private val _customModel = MutableStateFlow(false)
+    val customModel: StateFlow<Boolean> = _customModel.asStateFlow()
+
     private val _keyInput = MutableStateFlow("")
     val keyInput: StateFlow<String> = _keyInput.asStateFlow()
 
@@ -53,6 +57,8 @@ class ProviderViewModel @Inject constructor(
         _baseUrl.value = config.baseUrl
         _maskedKey.value = settings.maskedApiKey(config.type)
         _keyInput.value = ""
+        _customModel.value = config.type.requiresCustomModel ||
+            (config.model.isNotBlank() && config.model !in config.type.suggestedModels)
     }
 
     fun select(type: ProviderType) {
@@ -61,10 +67,23 @@ class ProviderViewModel @Inject constructor(
         _baseUrl.value = type.defaultBaseUrl
         _maskedKey.value = settings.maskedApiKey(type)
         _keyInput.value = ""
+        _customModel.value = type.requiresCustomModel
         _testState.value = TestState.Idle
     }
 
+    /** Pick one of the provider's suggested models. */
+    fun selectModel(model: String) {
+        _model.value = model
+        _customModel.value = false
+    }
+
+    /** Switch to free-text entry; keeps whatever is typed so it can be edited. */
+    fun chooseCustomModel() {
+        _customModel.value = true
+    }
+
     fun setModel(value: String) { _model.value = value }
+
     fun setBaseUrl(value: String) { _baseUrl.value = value }
     fun setKeyInput(value: String) { _keyInput.value = value }
 

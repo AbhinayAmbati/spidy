@@ -22,6 +22,7 @@ settings, provider setup, onboarding).
 | --- | --- |
 | Gradle / project structure | Done |
 | Design system (black / white / brown, light + dark, spacing, type, shapes) | Done |
+| Typography: Inter (body/UI) + Instrument Serif (headings), bundled | Done |
 | Splash screen (black background, red cursive wordmark) | Done |
 | Home, Task, History, Task detail, Settings, Provider, Memory, Onboarding screens + navigation | Done |
 | AI provider abstraction (OpenAI-compatible, Anthropic, Gemini, OpenRouter, Custom) | Done |
@@ -229,3 +230,36 @@ back to the debug key so the project still builds.
 2. Broaden automation coverage and add device tests across Chrome, Settings,
    Calculator, YouTube, Gmail and a messaging app.
 3. Instrumented (Espresso / Compose UI) tests for the agent screens.
+
+---
+
+## Fonts
+
+Two OFL-licensed families are bundled in `app/src/main/res/font/`:
+
+- **Inter** — body and UI text, included as static 400/500/600 instances
+  (the upstream variable font is instanced rather than used directly, so weights
+  resolve exactly without experimental variation APIs).
+- **Instrument Serif** — display and headline styles.
+
+Full licence texts are in `licenses/`. Both fonts are SIL Open Font License 1.1,
+which permits bundling and redistribution.
+
+---
+
+## Legal
+
+The in-app Terms of Service lives in `ui/settings/TermsContent.kt` and is reachable
+from Settings > Legal.
+
+**It is a template, not legal advice.** Before publishing, replace the placeholders
+(`ENTITY`, `JURISDICTION`, `CONTACT` at the top of that file) and have a qualified
+lawyer in your jurisdiction review it. The liability, indemnity and governing-law
+clauses in particular are not enforceable in the same way everywhere, and a
+"zero liability" clause may be limited or void in some jurisdictions.
+
+### Provider marks
+
+The provider icons in `res/drawable/ic_provider_*.xml` are original line-art marks
+drawn for this app. The vendors' actual logos are trademarks, and redistributing
+them would require brand permission — swap them in only if you obtain it.

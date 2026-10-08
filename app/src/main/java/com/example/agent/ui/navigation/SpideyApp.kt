@@ -32,6 +32,7 @@ import com.example.agent.ui.onboarding.OnboardingScreen
 import com.example.agent.ui.settings.MemoryScreen
 import com.example.agent.ui.settings.ProviderScreen
 import com.example.agent.ui.settings.SettingsScreen
+import com.example.agent.ui.settings.TermsScreen
 import com.example.agent.ui.splash.SplashScreen
 import com.example.agent.ui.task.TaskScreen
 import com.example.agent.ui.theme.spideyColors
@@ -118,6 +119,7 @@ fun SpideyApp(startDestination: String = Destinations.SPLASH) {
                     onOpenProvider = { navController.navigate(Destinations.PROVIDER) },
                     onOpenOnboarding = { navController.navigate(Destinations.ONBOARDING) },
                     onOpenMemory = { navController.navigate(Destinations.MEMORY) },
+                    onOpenTerms = { navController.navigate(Destinations.TERMS) },
                 )
             }
             composable(
@@ -130,6 +132,9 @@ fun SpideyApp(startDestination: String = Destinations.SPLASH) {
             }
             composable(Destinations.MEMORY) {
                 MemoryScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Destinations.TERMS) {
+                TermsScreen(onBack = { navController.popBackStack() })
             }
             composable(Destinations.PROVIDER) {
                 ProviderScreen(onBack = { navController.popBackStack() })

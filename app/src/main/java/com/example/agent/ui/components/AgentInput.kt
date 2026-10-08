@@ -30,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -38,7 +37,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import com.example.agent.ui.theme.SpideyElevation
 import com.example.agent.ui.theme.SpideySpacing
 import com.example.agent.ui.theme.spideyColors
 
@@ -82,11 +80,10 @@ fun AgentInput(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(SpideyElevation.raised, shape, clip = false)
             .clip(shape)
             .background(colors.glass)
             .border(1.dp, colors.border, shape)
-            .padding(horizontal = SpideySpacing.lg, vertical = SpideySpacing.md),
+            .padding(horizontal = SpideySpacing.md, vertical = SpideySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.weight(1f)) {

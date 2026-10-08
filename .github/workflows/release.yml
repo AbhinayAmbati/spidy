@@ -138,9 +138,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            app/build/outputs/apk/release/spidy.apk \
-            --title "Spidey ${GITHUB_REF_NAME}" \
-            --generate-notes \
-          || gh release upload "${GITHUB_REF_NAME}" \
-            app/build/outputs/apk/release/spidy.apk --clobber
+          APK=app/build/outputs/apk/release/spidy.apk
+          NOTES="release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$NOTES" ]; then
+            echo "Using release notes from $NOTES"
+            gh release create "${GITHUB_REF_NAME}" "$APK" \
+              --title "Spidey ${GITHUB_REF_NAME}" \
+              --notes-file "$NOTES" \
+            || gh release upload "${GITHUB_REF_NAME}" "$APK" --clobber
+          else
+            echo "No $NOTES; falling back to generated notes"
+            gh release create "${GITHUB_REF_NAME}" "$APK" \
+              --title "Spidey ${GITHUB_REF_NAME}" \
+              --generate-notes \
+            || gh release upload "${GITHUB_REF_NAME}" "$APK" --clobber
+          fi

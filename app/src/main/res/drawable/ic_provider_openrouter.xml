@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original mark: a routing split. Not the OpenRouter logo. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:pathData="M4.6,12 L10.8,12" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:pathData="M10.8,12 L17.2,6.6" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:pathData="M10.8,12 L17.2,17.4" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M18.1,5.7 a0.9,0.9 0 1,0 0.01,0 z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M18.1,16.5 a0.9,0.9 0 1,0 0.01,0 z" />
+</vector>
