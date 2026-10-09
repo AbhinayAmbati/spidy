@@ -1,6 +1,10 @@
 package com.example.agent.core.agent
 
+import android.os.SystemClock
+import android.view.accessibility.AccessibilityEvent
 import com.example.agent.automation.AndroidAutomationManager
+import com.example.agent.automation.accessibility.AccessibilityBridge
+import com.example.agent.automation.accessibility.UserTouchGate
 import com.example.agent.automation.observer.ScreenObserver
 import com.example.agent.automation.tools.ToolRegistry
 import com.example.agent.core.ai.AIProvider
@@ -12,6 +16,7 @@ import com.example.agent.data.preferences.SettingsRepository
 import com.example.agent.data.repository.MemoryRepository
 import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.ActionTarget
+import com.example.agent.domain.model.AwaitingKind
 import com.example.agent.domain.model.AgentAction
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
@@ -78,8 +83,44 @@ class AgentRuntime(
 
     val isRunning: Boolean get() = job?.isActive == true
 
+    @Volatile
+    private var touchToStopEnabled: Boolean = true
+
+    private var taskStartedAtMillis: Long = 0L
+
+    init {
+        // Kept hot so the touch handler never has to hit DataStore on a touch.
+        scope.launch {
+            settings.touchToStop.collect { touchToStopEnabled = it }
+        }
+
+        // Touch-to-stop. If the user puts a finger on the screen while the agent is
+        // working, they have taken over, so the task stops.
+        //
+        // Every reason *not* to stop lives in UserTouchGate: disabled by the user, the
+        // agent waiting on an answer, and the opening seconds of a task during which the
+        // tap that started it is still being delivered.
+        scope.launch {
+            AccessibilityBridge.userTouches.collect { eventTimeMillis ->
+                if (!isRunning) return@collect
+                val stop = UserTouchGate.shouldStopForUserTouch(
+                    // The platform's own constant, not a mirrored number.
+                    eventType = AccessibilityEvent.TYPE_TOUCH_INTERACTION_START,
+                    // When the touch happened, not when the event reached us.
+                    eventTimeMillis = eventTimeMillis,
+                    suppressUntilMillis = AccessibilityBridge.suppressUntilMillis(),
+                    taskStartedAtMillis = taskStartedAtMillis,
+                    enabled = touchToStopEnabled,
+                    awaitingUser = _progress.value.awaitingKind != AwaitingKind.None,
+                )
+                if (stop) stop(STOPPED_BY_TOUCH)
+            }
+        }
+    }
+
     fun start(prompt: String) {
         if (isRunning) return
+        taskStartedAtMillis = SystemClock.uptimeMillis()
         AgentHalt.clear()
         job = scope.launch { runTask(prompt) }
     }
@@ -91,7 +132,7 @@ class AgentRuntime(
      * start the next device operation, and any operation about to begin is refused.
      * Cancelling the job alone left launches and gestures running.
      */
-    fun stop() {
+    fun stop(reason: String = STOPPED_BY_USER) {
         AgentHalt.request()
         job?.cancel()
         job = null
@@ -102,8 +143,8 @@ class AgentRuntime(
         _paused.value = false
         _progress.value = _progress.value.copy(
             state = TaskState.CANCELLED,
-            message = "Stopped by you.",
-            awaitingKind = com.example.agent.domain.model.AwaitingKind.None,
+            message = reason,
+            awaitingKind = AwaitingKind.None,
         )
     }
 
@@ -605,6 +646,11 @@ class AgentRuntime(
         if (value == null) "an element" else "\"" + value + "\""
 
     private companion object {
+        const val STOPPED_BY_USER = "Stopped by you."
+
+        /** Shown when touch-to-stop fires. */
+        const val STOPPED_BY_TOUCH = "Stopped: you touched the screen."
+
         /** How many times we push the model back towards calling a tool before giving up. */
         const val MAX_TEXT_NUDGES = 2
 
@@ -623,9 +669,9 @@ class AgentRuntime(
          * and says nothing new.
          */
         const val UNCHANGED_NOTE =
-            "Observation: the screen is unchanged since your last action. Repeating that " +
-                "action will not help - do something different, or call finish if the task " +
-                "is already done."
+            "Observation: the screen is unchanged, so the listing above is still current. " +
+                "Repeating that action will not help - do something different, or call " +
+                "finish if the task is already done."
 
 
     }

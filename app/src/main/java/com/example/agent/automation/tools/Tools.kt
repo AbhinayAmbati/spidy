@@ -3,7 +3,6 @@ package com.example.agent.automation.tools
 import com.example.agent.automation.AndroidAutomationManager
 import com.example.agent.automation.accessibility.AccessibilityController.ActionResult
 import com.example.agent.automation.accessibility.TargetMatcher
-import com.example.agent.automation.observer.ScreenObserver
 import com.example.agent.core.ai.ValidationResult
 import com.example.agent.domain.model.ActionTarget
 import com.example.agent.domain.model.AgentAction
@@ -70,19 +69,18 @@ class CloseAppTool(private val automation: AndroidAutomationManager) : BaseTool(
 
 // --------------------------------------------------------------------------- observation
 
-class ReadScreenTool(
-    private val automation: AndroidAutomationManager,
-    private val observer: ScreenObserver,
-) : BaseTool() {
+/**
+ * Asks for a fresh listing. It does no work itself: the runtime observes the screen after
+ * every action anyway, so this used to take a whole snapshot whose result was then thrown
+ * away and immediately replaced.
+ */
+class ReadScreenTool : BaseTool() {
     override val name = ToolNames.READ_SCREEN
     override val description = "Read the current screen and list its interactive elements."
     override val parametersSchema = ToolSchemas.READ_SCREEN
 
-    override suspend fun execute(action: AgentAction): ToolResult {
-        val observation = observer.observe()
-        val app = automation.appLabel(observation.snapshot.packageName)
-        return ToolResult.Success(observation.rendered, mapOf("app" to (app ?: observation.snapshot.packageName)))
-    }
+    override suspend fun execute(action: AgentAction): ToolResult =
+        ToolResult.Success("Reading the screen now - the current listing follows.")
 }
 
 class FindTextTool(private val automation: AndroidAutomationManager) : BaseTool() {
@@ -190,9 +188,7 @@ class SwipeTool(private val automation: AndroidAutomationManager) : BaseTool() {
     override val parametersSchema = ToolSchemas.SWIPE
 
     override suspend fun execute(action: AgentAction): ToolResult {
-        val snapshot = automation.readScreen()
-        val w = snapshot.elements.maxOfOrNull { it.bounds.right } ?: 1080
-        val h = snapshot.elements.maxOfOrNull { it.bounds.bottom } ?: 1920
+        val (w, h) = automation.screenSize()
         val cx = w / 2
         val cy = h / 2
         val d = action.durationMs ?: 300L

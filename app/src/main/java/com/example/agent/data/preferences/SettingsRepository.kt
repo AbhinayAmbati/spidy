@@ -33,6 +33,7 @@ class SettingsRepository(
         val BASE_URL = stringPreferencesKey("base_url")
         val APPEARANCE = stringPreferencesKey("appearance")
         val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
+        val TOUCH_TO_STOP = booleanPreferencesKey("touch_to_stop")
         val ONBOARDED = booleanPreferencesKey("onboarded")
     }
 
@@ -79,6 +80,13 @@ class SettingsRepository(
 
     suspend fun setMemoryEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.MEMORY_ENABLED] = enabled }
+    }
+
+    /** Whether touching the screen stops a running task. */
+    val touchToStop: Flow<Boolean> = context.dataStore.data.map { it[Keys.TOUCH_TO_STOP] ?: true }
+
+    suspend fun setTouchToStop(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.TOUCH_TO_STOP] = enabled }
     }
 
     val onboarded: Flow<Boolean> = context.dataStore.data.map { it[Keys.ONBOARDED] ?: false }

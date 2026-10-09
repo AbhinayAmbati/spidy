@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Catch cross-package symbols used without an import.
 
+Kotlin resolves a symbol by simple name, so forgetting an import for one of our own types
+is an easy mistake that only shows up at compile time - and there is no Kotlin compiler in
+the dev sandbox, so it would otherwise surface only in CI.
+
 Kotlin resolves a symbol by simple name, so forgetting an import for one of our own
 types is an easy mistake that only shows up at compile time — and the sandbox has no
 Kotlin compiler, so it would otherwise surface only in CI.
@@ -32,9 +36,9 @@ _add("com.example.agent.core.ai",
 _add("com.example.agent.domain.model",
      "AgentAction ActionTarget ToolNames AgentMessage AgentResponse MessageRole ToolResult "
      "TaskStep StepStatus RecordedStep TaskState TaskProgress ScreenSnapshot UIElement "
-     "Bounds ActionRisk AwaitingKind MemoryEntry ElementKey")
+     "Bounds ActionRisk AwaitingKind MemoryEntry ElementKey inVisualOrder")
 _add("com.example.agent.automation.tools", "ToolSchemas ToolRegistry")
-_add("com.example.agent.automation.accessibility", "TargetMatcher AccessibilityBridge")
+_add("com.example.agent.automation.accessibility", "TargetMatcher AccessibilityBridge UserTouchGate SettleGate")
 _add("com.example.agent.automation", "AndroidAutomationManager")
 _add("com.example.agent.core.agent", "ActionValidator PromptBuilder AgentRuntime ActionSignature UrlPolicy ContextCompactor")
 _add("com.example.agent.core.control", "AgentHalt")

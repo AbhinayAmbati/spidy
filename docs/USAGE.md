@@ -61,6 +61,22 @@ Three things follow from this:
   device action checks before it runs, so nothing new begins — and there is a **Stop** button
   on the notification as well, so you do not have to find the app to halt a task that is
   driving your phone.
+- **Touching the screen stops the agent.** If you put a finger on the screen while it is
+  working, the task stops on the spot. That is the control that works when the app is buried,
+  the button is off-screen, or the agent has navigated somewhere you did not expect.
+
+  Three things deliberately do **not** trigger it: the first few seconds of a task, during
+  which the tap that started it is still being delivered by Android; while the agent is
+  waiting on you, where your touch is the answer to a confirmation or a question; and the
+  agent's own taps, which raise the same events a finger does.
+
+  That last one is judged by **when the touch happened**, not when the app heard about it.
+  Android delivers accessibility events late under load, so on a slow run the agent's own
+  gesture was being read as your finger. Every clock in the decision is the same one the
+  platform stamps events with.
+
+  If it stops when you did not mean it to, turn it off in **Settings → Safety → Stop when I
+  touch the screen**.
 
 ---
 
@@ -158,8 +174,15 @@ These three are what agents get wrong most often, so the agent is given explicit
 Each element in the screen listing looks like:
 
 ```
+Current app: Chrome
+Screen scrolls: yes
+Interactive elements (top to bottom):
   [a3f2c1] "Search" <EditText> (clickable,editable) id=search_box
 ```
+
+Elements are listed **top to bottom, left to right**, the way they appear on the screen, so
+the agent can tell what is above and below what. The header says whether the screen scrolls
+at all, which is what stops it scrolling blindly.
 
 - `[a3f2c1]` is a **key**: a short, stable identifier for that element.
 - `"Search"` is the visible text, or the content description when there is no text.
@@ -220,6 +243,9 @@ underneath it. That line is the most useful thing to share.
 | "I used X N times in a row without finishing" | The agent was hammering one tool | Name the element, or rephrase; it usually means what it needs is not on screen |
 | A message was not sent | Messaging links are refused by design | Ask it to open the messaging app and send from there |
 | The task kept going after Stop | Fixed — Stop now halts immediately | Update to v0.1.12 or later |
+| "Stopped: you touched the screen" | Touch-to-stop fired | Expected. Start the task again when you are ready |
+| It stops the moment a task starts, every time | Touch-to-stop was not armed yet, or an app raised touch events | Update to v0.1.15; if it persists, turn touch-to-stop off in Settings → Safety |
+| It stops when you did not touch it | Fixed in v0.1.16 — the agent's own taps were read as yours on slow runs | Update. If it still happens, Settings → Safety → turn off "Stop when I touch the screen" |
 
 ---
 

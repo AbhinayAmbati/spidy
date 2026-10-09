@@ -35,6 +35,16 @@ data class UIElement(
             ?: "element"
 }
 
+/**
+ * Elements in the order they appear on screen: top to bottom, then left to right.
+ *
+ * The listing used to follow the accessibility tree walk, which has no relation to what the
+ * user sees. Rendering in visual order makes the listing read like the screen, which is what
+ * the model is reasoning about.
+ */
+fun List<UIElement>.inVisualOrder(): List<UIElement> =
+    sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
+
 /** Screen-space rectangle in pixels. Kept dependency-free so it is unit-testable. */
 data class Bounds(val left: Int, val top: Int, val right: Int, val bottom: Int) {
     val centerX: Int get() = (left + right) / 2

@@ -34,6 +34,9 @@ class SettingsViewModel @Inject constructor(
     val memoryEnabled: StateFlow<Boolean> = settings.memoryEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    val touchToStop: StateFlow<Boolean> = settings.touchToStop
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
     private val _permissions = MutableStateFlow(PermissionUtils.status(context))
     val permissions: StateFlow<PermissionStatus> = _permissions
 
@@ -44,6 +47,8 @@ class SettingsViewModel @Inject constructor(
     fun setAppearance(mode: AppearanceMode) = viewModelScope.launch { settings.setAppearance(mode) }
 
     fun setMemory(enabled: Boolean) = viewModelScope.launch { settings.setMemoryEnabled(enabled) }
+
+    fun setTouchToStop(enabled: Boolean) = viewModelScope.launch { settings.setTouchToStop(enabled) }
 
     fun clearHistory() = viewModelScope.launch { history.clear() }
 }

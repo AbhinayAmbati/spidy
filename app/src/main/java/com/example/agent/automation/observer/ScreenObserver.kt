@@ -23,7 +23,11 @@ class ScreenObserver(private val automation: AndroidAutomationManager) {
         val app = snapshot.appLabel ?: snapshot.packageName ?: "unknown app"
         val sb = StringBuilder()
         sb.append("Current app: ").append(app).append('\n')
-        sb.append("Interactive elements:\n")
+        // Free to compute (it is already on the elements) and it stops the agent scrolling
+        // blindly on a screen that cannot scroll, or forgetting that it can.
+        val scrolls = if (snapshot.elements.any { it.scrollable }) "yes" else "no"
+        sb.append("Screen scrolls: ").append(scrolls).append('\n')
+        sb.append("Interactive elements (top to bottom):\n")
         snapshot.elements.forEach { el ->
             val flags = buildList {
                 if (el.clickable) add("clickable")

@@ -107,7 +107,7 @@ object AppModule {
         listOf(
             OpenAppTool(automation),
             CloseAppTool(automation),
-            ReadScreenTool(automation, observer),
+            ReadScreenTool(),
             FindTextTool(automation),
             ClickTool(automation),
             LongClickTool(automation),

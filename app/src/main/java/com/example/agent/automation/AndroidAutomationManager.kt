@@ -108,13 +108,11 @@ class AndroidAutomationManager(
     /** Package of the app currently on screen, or null if unknown. */
     suspend fun currentPackage(): String? = controller.currentPackage()
 
-    suspend fun findText(query: String): Boolean {
-        val snapshot = controller.snapshot()
-        return snapshot.elements.any {
-            it.text?.contains(query, ignoreCase = true) == true ||
-                it.contentDescription?.contains(query, ignoreCase = true) == true
-        }
-    }
+    /** Screen size in pixels, without traversing the view tree. */
+    fun screenSize(): Pair<Int, Int> = controller.screenSize()
+
+    /** Platform text search. The old version built a full snapshot to answer a boolean. */
+    suspend fun findText(query: String): Boolean = controller.hasText(query)
 
     suspend fun click(target: TargetMatcher): ActionResult = controller.click(target)
     suspend fun longClick(target: TargetMatcher): ActionResult = controller.longClick(target)

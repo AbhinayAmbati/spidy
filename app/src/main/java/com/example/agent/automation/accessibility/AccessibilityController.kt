@@ -5,11 +5,13 @@ import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.graphics.Rect
 import android.os.Build
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.agent.core.control.AgentHalt
 import com.example.agent.domain.model.Bounds
 import com.example.agent.domain.model.ScreenSnapshot
 import com.example.agent.domain.model.UIElement
+import com.example.agent.domain.model.inVisualOrder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -49,13 +51,15 @@ class AccessibilityController {
             val collected = ArrayList<AccessibilityNodeInfo>()
             traverse(root, 0, maxDepth, maxElements, collected)
 
-            lastNodes = collected
-
             val byKey = HashMap<String, AccessibilityNodeInfo>()
-            val elements = collected.mapIndexed { index, node ->
+            val built = ArrayList<UIElement>(collected.size)
+            collected.forEach { node ->
+                // The one place bounds are read. Zero-size nodes are dropped here rather
+                // than paying for bounds on every node in the tree just to filter them.
                 val rect = Rect().also { node.getBoundsInScreen(it) }
+                if (rect.width() <= 0 || rect.height() <= 0) return@forEach
                 val element = UIElement(
-                    ref = index,
+                    ref = built.size,
                     id = node.viewIdResourceName,
                     text = node.text?.toString()?.trim()?.takeIf { it.isNotEmpty() },
                     contentDescription = node.contentDescription?.toString()?.trim()?.takeIf { it.isNotEmpty() },
@@ -68,8 +72,14 @@ class AccessibilityController {
                     bounds = Bounds(rect.left, rect.top, rect.right, rect.bottom),
                 )
                 byKey[element.key] = node
-                element
+                built.add(element)
             }
+
+            // Visual order, so the listing reads like the screen the user is looking at
+            // instead of an arbitrary tree walk. Keys are content-derived, so this does not
+            // disturb targeting.
+            val elements = built.inVisualOrder()
+            lastNodes = elements.mapNotNull { byKey[it.key] }
             lastNodesByKey = byKey
 
             ScreenSnapshot(
@@ -96,10 +106,13 @@ class AccessibilityController {
         }
     }
 
+    /**
+     * Cheap test only. This runs for *every* node in the tree, so it must not touch bounds:
+     * the old version called getBoundsInScreen here and then again for each kept element,
+     * paying for the whole tree twice over. Bounds are now read once, for kept elements only.
+     */
     private fun isInteresting(node: AccessibilityNodeInfo): Boolean {
         if (!node.isVisibleToUser) return false
-        val rect = Rect().also { node.getBoundsInScreen(it) }
-        if (rect.width() <= 0 || rect.height() <= 0) return false
         val hasText = !node.text.isNullOrBlank() || !node.contentDescription.isNullOrBlank()
         val interactive = node.isClickable || node.isEditable || node.isScrollable || node.isLongClickable
         return hasText || interactive
@@ -117,6 +130,7 @@ class AccessibilityController {
 
     suspend fun click(target: TargetMatcher): ActionResult = withContext(Dispatchers.Main) {
         if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
+        AccessibilityBridge.suppressTouchesFor(UserTouchGate.ACTION_WINDOW_MS)
         // A node captured by an earlier snapshot can go stale once the window changes;
         // touching one throws IllegalStateException. That must not take down the task.
         runCatching {
@@ -129,6 +143,7 @@ class AccessibilityController {
 
     suspend fun longClick(target: TargetMatcher): ActionResult = withContext(Dispatchers.Main) {
         if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
+        AccessibilityBridge.suppressTouchesFor(UserTouchGate.ACTION_WINDOW_MS)
         runCatching {
             val node = resolve(target) ?: return@withContext ActionResult.NotFound
             val clickable = clickableSelfOrAncestor(node) ?: return@withContext ActionResult.NotFound
@@ -139,6 +154,7 @@ class AccessibilityController {
 
     suspend fun setText(target: TargetMatcher, text: String): ActionResult = withContext(Dispatchers.Main) {
         if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
+        AccessibilityBridge.suppressTouchesFor(UserTouchGate.ACTION_WINDOW_MS)
         val node = resolve(target) ?: focusedEditable() ?: return@withContext ActionResult.NotFound
         val args = android.os.Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
@@ -152,6 +168,7 @@ class AccessibilityController {
 
     suspend fun scroll(direction: String?): ActionResult = withContext(Dispatchers.Main) {
         if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
+        AccessibilityBridge.suppressTouchesFor(UserTouchGate.ACTION_WINDOW_MS)
         val root = service?.rootInActiveWindow ?: return@withContext ActionResult.NotFound
 
         // The first scrollable in traversal order is often a small nested scroller, which
@@ -182,16 +199,19 @@ class AccessibilityController {
 
     suspend fun swipe(fromX: Int, fromY: Int, toX: Int, toY: Int, durationMs: Long): ActionResult {
         if (AgentHalt.isStopped) return ActionResult.Stopped
+        AccessibilityBridge.suppressTouchesFor(UserTouchGate.ACTION_WINDOW_MS)
         return gesture(fromX, fromY, toX, toY, durationMs)
     }
 
     suspend fun tap(x: Int, y: Int): ActionResult {
         if (AgentHalt.isStopped) return ActionResult.Stopped
+        AccessibilityBridge.suppressTouchesFor(UserTouchGate.ACTION_WINDOW_MS)
         return gesture(x, y, x, y, 60)
     }
 
     suspend fun pressBack(): ActionResult = withContext(Dispatchers.Main) {
         if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
+        AccessibilityBridge.suppressTouchesFor(UserTouchGate.ACTION_WINDOW_MS)
         val svc = service ?: return@withContext ActionResult.NotFound
         if (svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) ActionResult.Ok
         else ActionResult.Unsupported
@@ -199,45 +219,43 @@ class AccessibilityController {
 
     suspend fun pressHome(): ActionResult = withContext(Dispatchers.Main) {
         if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
+        AccessibilityBridge.suppressTouchesFor(UserTouchGate.ACTION_WINDOW_MS)
         val svc = service ?: return@withContext ActionResult.NotFound
         if (svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)) ActionResult.Ok
         else ActionResult.Unsupported
     }
 
-    /** Waits until the screen stops changing (coarse settle heuristic). */
+    /**
+     * Waits until the screen stops changing.
+     *
+     * This used to poll the view tree: two traversals of up to 80 nodes every 120 ms, for as
+     * long as four seconds, on every single step - thousands of node visits on the main
+     * thread per step, and up to 40 seconds of it across a ten-step task. It now watches the
+     * platform's own window-change events, which the service already receives, so the wait
+     * costs one volatile read per tick and nothing else.
+     *
+     * A change that happened before this call does not count, so the quiet window always
+     * starts from the action we are waiting on.
+     */
     suspend fun awaitIdle(quietMs: Long = 500, timeoutMs: Long = 4_000): Boolean {
-        val start = System.currentTimeMillis()
-        var lastChange = System.currentTimeMillis()
-        val svc = service ?: return false
-        while (System.currentTimeMillis() - start < timeoutMs) {
-            val before = snapshotFingerprint()
-            delay(120)
-            val after = snapshotFingerprint()
-            if (before != after) lastChange = System.currentTimeMillis()
-            if (System.currentTimeMillis() - lastChange >= quietMs) return true
+        if (service == null) return false
+        val started = SystemClock.uptimeMillis()
+        while (true) {
+            val now = SystemClock.uptimeMillis()
+            if (SettleGate.isSettled(now, AccessibilityBridge.lastScreenChangeMillis(), started, quietMs)) {
+                return true
+            }
+            if (SettleGate.isTimedOut(now, started, timeoutMs)) return false
+            delay(SettleGate.TICK_MS)
         }
-        return false
-    }
-
-    private suspend fun snapshotFingerprint(): Int = withContext(Dispatchers.Main) {
-        val root = service?.rootInActiveWindow ?: return@withContext 0
-        var acc = 0
-        val stack = ArrayDeque<AccessibilityNodeInfo>()
-        stack.addLast(root)
-        var count = 0
-        while (stack.isNotEmpty() && count < 80) {
-            val n = stack.removeLast()
-            count++
-            acc = 31 * acc + (n.text?.hashCode() ?: 0)
-            for (i in 0 until n.childCount) n.getChild(i)?.let { stack.addLast(it) }
-        }
-        acc
     }
 
     // ---------------------------------------------------------------- helpers
 
     private suspend fun gesture(fromX: Int, fromY: Int, toX: Int, toY: Int, durationMs: Long): ActionResult {
         if (AgentHalt.isStopped) return ActionResult.Stopped
+        // The longest window wins, so a nested tap cannot shorten a running swipe.
+        AccessibilityBridge.suppressTouchesFor(durationMs)
         val svc = service ?: return ActionResult.NotFound
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return ActionResult.Unsupported
         return withContext(Dispatchers.Main) {
@@ -366,9 +384,38 @@ class AccessibilityController {
         return null
     }
 
+    /**
+     * Screen size in pixels. Read straight from the display metrics - the swipe tool used to
+     * build a whole snapshot just to find the widest and lowest element.
+     */
+    fun screenSize(): Pair<Int, Int> {
+        val metrics = service?.resources?.displayMetrics
+            ?: return DEFAULT_WIDTH to DEFAULT_HEIGHT
+        return metrics.widthPixels to metrics.heightPixels
+    }
+
+    /**
+     * Whether [query] appears on screen. Uses the platform's own text search rather than
+     * building a whole snapshot to answer a yes/no question.
+     */
+    suspend fun hasText(query: String): Boolean = withContext(Dispatchers.Main) {
+        val root = service?.rootInActiveWindow ?: return@withContext false
+        runCatching { root.findAccessibilityNodeInfosByText(query) }
+            .getOrNull()
+            ?.isNotEmpty() == true
+    }
+
+    /** Whether anything on the current screen can be scrolled. */
+    suspend fun hasScrollable(): Boolean = withContext(Dispatchers.Main) {
+        val root = service?.rootInActiveWindow ?: return@withContext false
+        findFirst(root) { it.isScrollable } != null
+    }
+
     private companion object {
         val BACKWARD_DIRECTIONS = setOf("back", "backward", "up", "left")
         const val GESTURE_SCROLL_MS = 260L
+        const val DEFAULT_WIDTH = 1080
+        const val DEFAULT_HEIGHT = 1920
     }
 
     sealed interface ActionResult {

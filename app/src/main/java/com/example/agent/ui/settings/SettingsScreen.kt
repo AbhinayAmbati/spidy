@@ -49,6 +49,7 @@ fun SettingsScreen(
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
     val provider by viewModel.providerConfig.collectAsStateWithLifecycle()
     val memory by viewModel.memoryEnabled.collectAsStateWithLifecycle()
+    val touchToStop by viewModel.touchToStop.collectAsStateWithLifecycle()
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
 
     // Accessibility and notification access are granted in *system* settings, so
@@ -116,6 +117,29 @@ fun SettingsScreen(
         SectionHeader(title = stringResource(R.string.settings_appearance))
         Spacer(Modifier.height(SpideySpacing.md))
         AppearanceSelector(selected = appearance, onSelect = viewModel::setAppearance)
+
+        Spacer(Modifier.height(SpideySpacing.sectionGap))
+
+        SectionHeader(title = "Safety")
+        Spacer(Modifier.height(SpideySpacing.md))
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Stop when I touch the screen",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Text(
+                        text = "Touching the screen while a task is running stops it. Turn this " +
+                            "off if the agent stops when you did not mean it to.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.spideyColors.textSecondary,
+                    )
+                }
+                Switch(checked = touchToStop, onCheckedChange = viewModel::setTouchToStop)
+            }
+        }
 
         Spacer(Modifier.height(SpideySpacing.sectionGap))
 
