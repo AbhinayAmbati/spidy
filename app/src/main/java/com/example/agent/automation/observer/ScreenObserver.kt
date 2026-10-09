@@ -32,17 +32,26 @@ class ScreenObserver(private val automation: AndroidAutomationManager) {
                 if (!el.enabled) add("disabled")
             }.joinToString(",")
             sb.append("  [").append(el.key).append("] ")
-                .append("\"").append(el.label.take(80)).append("\"")
+                .append("\"").append(el.label.take(MAX_LABEL_CHARS)).append("\"")
             // The widget type matters: an EditText is typeable, a TextView is not.
             el.className?.substringAfterLast('.')?.takeIf { it.isNotBlank() }?.let {
                 sb.append(" <").append(it).append(">")
             }
             if (flags.isNotEmpty()) sb.append(" (").append(flags).append(")")
-            el.id?.let { sb.append(" id=").append(it.substringAfterLast('/')) }
+            // The id is a fallback target. When there is text or a description, the model
+            // targets by that, so the id is noise - and it is ~25 characters per element.
+            if (el.text.isNullOrBlank() && el.contentDescription.isNullOrBlank()) {
+                el.id?.let { sb.append(" id=").append(it.substringAfterLast('/')) }
+            }
             sb.append('\n')
         }
         return sb.toString()
     }
 
     data class Observation(val snapshot: ScreenSnapshot, val rendered: String)
+
+    private companion object {
+        /** Labels are for recognising an element, not reading it in full. */
+        const val MAX_LABEL_CHARS = 60
+    }
 }

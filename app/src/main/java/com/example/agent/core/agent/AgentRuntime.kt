@@ -309,8 +309,10 @@ class AgentRuntime(
                 fun observationText(rendered: String): String {
                     val unchanged = rendered == lastObservation
                     if (unchanged) consecutiveUnchanged++ else consecutiveUnchanged = 0
-                    return (if (unchanged) UNCHANGED_NOTE else "") +
-                        PromptBuilder.observationMessage(rendered)
+                    // Re-sending an identical listing is the single most wasteful thing the
+                    // loop did: the same ~2,500 tokens carrying no new information. The model
+                    // already has it from the previous step.
+                    return if (unchanged) UNCHANGED_NOTE else PromptBuilder.observationMessage(rendered)
                 }
 
                 // ---- repeat guard -------------------------------------------------
@@ -441,13 +443,10 @@ class AgentRuntime(
      * original task (with its first screen), then the most recent exchanges. Without
      * this a 30-step task would carry 30 full screen dumps and blow the context window.
      */
-    private fun trim(messages: MutableList<AgentMessage>, max: Int = MAX_CONTEXT_MESSAGES) {
-        if (messages.size <= max) return
-        val head = messages.take(2)
-        val tail = messages.takeLast(max - 2)
+    private fun trim(messages: MutableList<AgentMessage>) {
+        val compacted = ContextCompactor.compact(messages)
         messages.clear()
-        messages.addAll(head)
-        messages.addAll(tail)
+        messages.addAll(compacted)
     }
 
     private suspend fun awaitResumeIfPaused() {
@@ -606,9 +605,6 @@ class AgentRuntime(
         if (value == null) "an element" else "\"" + value + "\""
 
     private companion object {
-        /** System + task + this many trailing messages are kept. */
-        const val MAX_CONTEXT_MESSAGES = 24
-
         /** How many times we push the model back towards calling a tool before giving up. */
         const val MAX_TEXT_NUDGES = 2
 
@@ -621,8 +617,16 @@ class AgentRuntime(
         /** Consecutive uses of one tool before we stop - the agent is hammering it. */
         const val MAX_SAME_TOOL_STREAK = 4
 
-        /** Prefix added when an action left the screen exactly as it was. */
-        const val UNCHANGED_NOTE = "The screen is unchanged since your last action.\n\n"
+        /**
+         * Sent instead of a full listing when an action left the screen exactly as it was.
+         * The listing is already in the conversation; repeating it costs thousands of tokens
+         * and says nothing new.
+         */
+        const val UNCHANGED_NOTE =
+            "Observation: the screen is unchanged since your last action. Repeating that " +
+                "action will not help - do something different, or call finish if the task " +
+                "is already done."
+
 
     }
 }

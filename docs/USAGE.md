@@ -223,7 +223,64 @@ underneath it. That line is the most useful thing to share.
 
 ---
 
-## 7. Limits
+## 7. Cost
+
+Spidey is billed by your AI provider, and **almost all of it is input tokens** — the text
+sent *to* the model, not the text it writes back. A real bill looked like this:
+
+| | tokens | cost |
+| --- | --- | --- |
+| input | 1.4M | ₹39.78 |
+| output | 12.9K | ₹0.95 |
+
+That is 97% input. The model barely talks; it mostly reads. So the way to spend less is to
+send less, and the app now does.
+
+### What was expensive
+
+Every step sent the **whole conversation**, and most of that conversation was old screen
+listings. A listing of 120 elements is roughly 2,500 tokens, and up to 22 messages were
+carried into each request — tens of thousands of tokens per step, resent on every step, for
+screens the agent had already finished with.
+
+### What changed in v0.1.13
+
+- **Only the two most recent screen listings are kept in full.** Older ones become a short
+  marker. The turn is kept so tool calls stay paired, but the text is gone.
+- **The opening screen is dropped** as soon as anything newer exists.
+- **An unchanged screen is not re-sent at all.** If an action leaves the screen exactly as it
+  was, the model gets one line saying so, instead of the same 2,500 tokens again.
+- **Shorter element lines** — labels are capped, and the resource id is only shown when there
+  is no text to target by.
+
+Together this cuts a typical request by about **5x**, and more on repetitive runs — which is
+exactly where the money was going.
+
+### Fixed overhead
+
+Two things are sent on every single request and cannot be dropped:
+
+- the system prompt, ~950 tokens;
+- the tool definitions, ~970 tokens.
+
+That is ~1,900 tokens per step regardless of the task. If your provider offers **prompt
+caching**, enabling it makes the system prompt and tools close to free after the first call —
+worth checking, and it is a provider setting, not something the app controls.
+
+### Spending less
+
+- **Prefer a cheaper model** for simple tasks; the tool-calling rules are in the prompt, not
+  the model.
+- **Say the outcome plainly.** "Search the web for X" takes one step; describing the steps
+  yourself takes many, and every step costs a request.
+- **Let it stop.** The loop guards end a task that is making no progress, which is also the
+  cheapest outcome for a task that was never going to work.
+- **Keep tasks small.** A 20-step task costs roughly 20 requests; two 10-step tasks cost the
+  same, but one 20-step task that fails at step 19 costs more than two that succeed early.
+
+---
+
+## 8. Limits
 
 - **No screenshots.** Spidey reads the accessibility tree, not pixels. Apps that expose
   nothing useful to accessibility are out of reach.

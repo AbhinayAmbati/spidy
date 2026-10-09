@@ -36,7 +36,7 @@ _add("com.example.agent.domain.model",
 _add("com.example.agent.automation.tools", "ToolSchemas ToolRegistry")
 _add("com.example.agent.automation.accessibility", "TargetMatcher AccessibilityBridge")
 _add("com.example.agent.automation", "AndroidAutomationManager")
-_add("com.example.agent.core.agent", "ActionValidator PromptBuilder AgentRuntime ActionSignature UrlPolicy")
+_add("com.example.agent.core.agent", "ActionValidator PromptBuilder AgentRuntime ActionSignature UrlPolicy ContextCompactor")
 _add("com.example.agent.core.control", "AgentHalt")
 _add("com.example.agent.core.permissions", "PermissionUtils")
 
