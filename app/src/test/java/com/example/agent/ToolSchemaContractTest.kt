@@ -101,12 +101,27 @@ class ToolSchemaContractTest {
     }
 
     @Test
-    fun `the target object offers exactly the fields the matcher understands`() {
+    fun `every field the target schema offers is one the matcher can read`() {
+        // The schema may offer fewer fields than the model type carries (ref is kept as a
+        // legacy fallback but is no longer advertised), but it must never offer one the
+        // code cannot read.
         val click = obj(ToolSchemas.CLICK)
         val target = (click["properties"] as JsonObject)["target"] as JsonObject
 
-        assertThat((target["properties"] as JsonObject).keys)
-            .containsExactlyElementsIn(targetFields)
+        val offered = (target["properties"] as JsonObject).keys
+        assertThat(targetFields).containsAtLeastElementsIn(offered)
+    }
+
+    @Test
+    fun `the target schema offers the stable key and not the fragile positional ref`() {
+        val click = obj(ToolSchemas.CLICK)
+        val target = (click["properties"] as JsonObject)["target"] as JsonObject
+        val offered = (target["properties"] as JsonObject).keys
+
+        // A ref was an index into one snapshot, so it pointed at the wrong element as soon
+        // as the screen changed. Keys are derived from what the element is.
+        assertThat(offered).contains("key")
+        assertThat(offered).doesNotContain("ref")
     }
 
     @Test

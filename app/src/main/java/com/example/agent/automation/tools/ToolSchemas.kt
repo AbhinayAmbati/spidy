@@ -8,7 +8,7 @@ object ToolSchemas {
            "text":{"type":"string","description":"Visible text of the element"},
            "contentDescription":{"type":"string","description":"Accessibility description"},
            "viewId":{"type":"string","description":"Resource id from the observation, e.g. url_bar"},
-           "ref":{"type":"integer","description":"Element index from the latest screen observation"},
+           "key":{"type":"string","description":"The [key] shown for the element in the latest observation"},
            "className":{"type":"string","description":"Widget class name"}
          }}
     """

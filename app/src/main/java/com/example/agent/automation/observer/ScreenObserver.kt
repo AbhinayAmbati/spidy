@@ -31,7 +31,7 @@ class ScreenObserver(private val automation: AndroidAutomationManager) {
                 if (el.scrollable) add("scrollable")
                 if (!el.enabled) add("disabled")
             }.joinToString(",")
-            sb.append("  [").append(el.ref).append("] ")
+            sb.append("  [").append(el.key).append("] ")
                 .append("\"").append(el.label.take(80)).append("\"")
             // The widget type matters: an EditText is typeable, a TextView is not.
             el.className?.substringAfterLast('.')?.takeIf { it.isNotBlank() }?.let {

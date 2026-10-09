@@ -16,6 +16,7 @@ private fun ActionTarget?.toMatcher(): TargetMatcher = TargetMatcher(
     contentDescription = this?.contentDescription,
     viewId = this?.viewId,
     ref = this?.ref,
+    key = this?.key,
     className = this?.className,
 )
 
@@ -34,11 +35,20 @@ class OpenAppTool(private val automation: AndroidAutomationManager) : BaseTool()
         val query = action.packageName!!.trim()
         val pkg = automation.resolvePackage(query)
             ?: return ToolResult.Failure("No installed app matches \"$query\".")
+
+        // Re-opening an app that is already in front changes nothing, and a model that
+        // cannot tell will happily do it forever. Say so plainly instead.
+        if (automation.currentPackage() == pkg) {
+            val label = automation.appLabel(pkg) ?: pkg
+            return ToolResult.Success(
+                "$label is already the app on screen, so nothing changed. Do not open it again — " +
+                    "use read_screen to see it, or act on it directly.",
+            )
+        }
+
         return when (val outcome = automation.openApp(pkg)) {
-            is AndroidAutomationManager.LaunchOutcome.Launched -> {
-                automation.readScreen() // warm up the observer
+            is AndroidAutomationManager.LaunchOutcome.Launched ->
                 ToolResult.Success("Opened ${automation.appLabel(pkg) ?: pkg} ($pkg).", mapOf("package" to pkg))
-            }
             AndroidAutomationManager.LaunchOutcome.NotInstalled ->
                 ToolResult.Failure("App $pkg is not installed.")
             is AndroidAutomationManager.LaunchOutcome.Failed ->
@@ -108,7 +118,10 @@ class ClickTool(private val automation: AndroidAutomationManager) : BaseTool() {
         val result = automation.click(matcher)
         return when (result) {
             ActionResult.Ok -> ToolResult.Success("Tapped ${matcher.describe()}.")
-            ActionResult.NotFound -> ToolResult.Failure("Could not find ${matcher.describe()} on screen.")
+            ActionResult.NotFound -> ToolResult.Failure(
+                "Could not find ${matcher.describe()} on screen. The screen may have changed " +
+                    "since it was listed - call read_screen and target something in the new list.",
+            )
             ActionResult.Unsupported -> ToolResult.Failure("That element could not be tapped.")
         }
     }
@@ -127,7 +140,10 @@ class LongClickTool(private val automation: AndroidAutomationManager) : BaseTool
         val matcher = action.target.toMatcher()
         return when (automation.longClick(matcher)) {
             ActionResult.Ok -> ToolResult.Success("Long-pressed ${matcher.describe()}.")
-            ActionResult.NotFound -> ToolResult.Failure("Could not find ${matcher.describe()}.")
+            ActionResult.NotFound -> ToolResult.Failure(
+                "Could not find ${matcher.describe()}. The screen may have changed - " +
+                    "call read_screen and target something in the new list.",
+            )
             ActionResult.Unsupported -> ToolResult.Failure("Long-press is not supported there.")
         }
     }

@@ -159,6 +159,12 @@ class AgentRuntime(
         }
 
         var nudges = 0
+        // Loop protection. The most common failure is running the same action over and
+        // over — opening an app already on screen, or retyping text that is already there.
+        // The prompt forbids it, but that cannot be relied on.
+        var lastObservation: String? = null
+        val sigToObservation = mutableMapOf<String, String>()
+        val repeatRefusals = mutableMapOf<String, Int>()
         val messages = mutableListOf<AgentMessage>()
         messages += AgentMessage(MessageRole.System, PromptBuilder.systemPrompt(knownApps))
 
@@ -250,6 +256,44 @@ class AgentRuntime(
                     trim(messages)
                 }
 
+                fun observationText(rendered: String): String {
+                    val unchanged = rendered == lastObservation
+                    return (if (unchanged) UNCHANGED_NOTE else "") +
+                        PromptBuilder.observationMessage(rendered)
+                }
+
+                // ---- repeat guard -------------------------------------------------
+                // Refuse to re-run an action whose arguments are identical to one that
+                // already ran and left the screen exactly as it is. If the model keeps
+                // insisting, stop rather than spin.
+                val sig = ActionSignature.of(action)
+                val previousObservation = sig?.let { sigToObservation[it] }
+                if (sig != null && previousObservation != null && previousObservation == lastObservation) {
+                    val refusals = (repeatRefusals[sig] ?: 0) + 1
+                    repeatRefusals[sig] = refusals
+
+                    if (refusals >= MAX_REPEAT_REFUSALS) {
+                        markStep(steps, index, StepStatus.Failed, "Repeated with no progress")
+                        finish(
+                            taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
+                            "I kept repeating the same action and the screen never changed, so I " +
+                                "stopped instead of looping. Name the exact element you want tapped, " +
+                                "or try rephrasing.",
+                        )
+                        return
+                    }
+
+                    markStep(steps, index, StepStatus.Failed, "Already tried — nothing changed")
+                    recordCall()
+                    recordResult(
+                        "You already ran this exact action and the screen has NOT changed. " +
+                            "Running it again will not help. Do something different now: " +
+                            "read_screen, scroll to reveal the element, choose a different " +
+                            "element, or call finish if the task is already done.",
+                    )
+                    continue
+                }
+
                 when (val outcome = validator.validate(action, step)) {
                     is ActionValidator.Outcome.Rejected -> {
                         markStep(steps, index, StepStatus.Failed, outcome.reason)
@@ -290,7 +334,9 @@ class AgentRuntime(
                         automation.awaitUiSettled()
                         val next = observer.observe()
                         next.snapshot.packageName?.let { appsUsed.add(it) }
-                        recordResult(PromptBuilder.observationMessage(next.rendered))
+                        recordResult(observationText(next.rendered))
+                        lastObservation = next.rendered
+                        sig?.let { sigToObservation[it] = next.rendered }
 
                         if (action.action == ToolNames.FINISH) {
                             finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.COMPLETED, result.observation)
@@ -306,7 +352,9 @@ class AgentRuntime(
                         automation.awaitUiSettled()
                         val next = observer.observe()
                         next.snapshot.packageName?.let { appsUsed.add(it) }
-                        recordResult(result.message + "\n\n" + PromptBuilder.observationMessage(next.rendered))
+                        recordResult(result.message + "\n\n" + observationText(next.rendered))
+                        lastObservation = next.rendered
+                        sig?.let { sigToObservation[it] = next.rendered }
                     }
                     is ToolResult.NeedsConfirmation -> {
                         markStep(steps, index, StepStatus.Done)
@@ -493,6 +541,7 @@ class AgentRuntime(
         target == null -> "an element"
         !target.text.isNullOrBlank() -> quoted(target.text)
         !target.contentDescription.isNullOrBlank() -> quoted(target.contentDescription)
+        !target.key.isNullOrBlank() -> "element ${target.key}"
         target.ref != null -> "element #${target.ref}"
         !target.viewId.isNullOrBlank() -> "the ${target.viewId.substringAfterLast('/')} field"
         !target.className.isNullOrBlank() -> "the ${target.className.substringAfterLast('.')} element"
@@ -508,5 +557,12 @@ class AgentRuntime(
 
         /** How many times we push the model back towards calling a tool before giving up. */
         const val MAX_TEXT_NUDGES = 2
+
+        /** How many times we refuse a repeat before ending the task instead of looping. */
+        const val MAX_REPEAT_REFUSALS = 3
+
+        /** Prefix added when an action left the screen exactly as it was. */
+        const val UNCHANGED_NOTE = "The screen is unchanged since your last action.\n\n"
+
     }
 }

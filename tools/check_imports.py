@@ -32,7 +32,7 @@ _add("com.example.agent.core.ai",
 _add("com.example.agent.domain.model",
      "AgentAction ActionTarget ToolNames AgentMessage AgentResponse MessageRole ToolResult "
      "TaskStep StepStatus RecordedStep TaskState TaskProgress ScreenSnapshot UIElement "
-     "Bounds ActionRisk AwaitingKind MemoryEntry")
+     "Bounds ActionRisk AwaitingKind MemoryEntry ElementKey")
 _add("com.example.agent.automation.tools", "ToolSchemas ToolRegistry")
 _add("com.example.agent.automation.accessibility", "TargetMatcher AccessibilityBridge")
 _add("com.example.agent.automation", "AndroidAutomationManager")

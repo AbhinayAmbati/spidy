@@ -20,6 +20,13 @@ data class UIElement(
     val scrollable: Boolean,
     val bounds: Bounds,
 ) {
+    /**
+     * Stable identifier the model can refer to. Unlike [ref], which is a position in one
+     * snapshot, this is derived from what the element is, so it survives a re-read.
+     */
+    val key: String
+        get() = ElementKey.of(id, className, text, contentDescription, bounds)
+
     /** Human label used when building the model prompt and for logging. */
     val label: String
         get() = text?.takeIf { it.isNotBlank() }

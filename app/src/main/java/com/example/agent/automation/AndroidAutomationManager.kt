@@ -101,6 +101,9 @@ class AndroidAutomationManager(
 
     fun isAccessibilityReady(): Boolean = controller.isAvailable()
 
+    /** Package of the app currently on screen, or null if unknown. */
+    suspend fun currentPackage(): String? = controller.currentPackage()
+
     suspend fun findText(query: String): Boolean {
         val snapshot = controller.snapshot()
         return snapshot.elements.any {

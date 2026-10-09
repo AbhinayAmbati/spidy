@@ -9,6 +9,9 @@ needs your approval.
 It is not a chatbot in an app, and not an automation dashboard. The whole interface
 answers one question: **"What do you want me to do?"**
 
+**New here? Read [docs/USAGE.md](docs/USAGE.md)** — setup, how the agent works, how to
+phrase tasks, what each tool does, and what to do when a step fails.
+
 ---
 
 ## Status
@@ -23,7 +26,7 @@ settings, provider setup, onboarding).
 | Gradle / project structure | Done |
 | Design system (black / white / brown, light + dark, spacing, type, shapes) | Done |
 | Typography: Inter (body/UI) + Instrument Serif (headings), bundled | Done |
-| Splash screen (black background, red cursive wordmark) | Done |
+| Splash screen (black background, white cursive wordmark) | Done |
 | Home, Task, History, Task detail, Settings, Provider, Memory, Onboarding screens + navigation | Done |
 | AI provider abstraction (OpenAI-compatible, Anthropic, Gemini, OpenRouter, Custom) | Done |
 | BYOK with encrypted credential storage | Done |

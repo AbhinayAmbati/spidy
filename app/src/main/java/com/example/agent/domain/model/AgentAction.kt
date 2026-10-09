@@ -29,7 +29,10 @@ data class ActionTarget(
     val text: String? = null,
     val contentDescription: String? = null,
     val viewId: String? = null,
+    /** Legacy positional index. Prefer [key]. */
     val ref: Int? = null,
+    /** The [ElementKey] shown in the latest observation. */
+    val key: String? = null,
     val className: String? = null,
 )
 
