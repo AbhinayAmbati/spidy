@@ -27,6 +27,12 @@ class HomeViewModel @Inject constructor(
 
     val progress: StateFlow<TaskProgress> = runtime.progress
 
+    /** Stop the running task. The Home status card offered this button but it was inert. */
+    fun stop() {
+        runtime.stop()
+        AgentForegroundService.stop(context)
+    }
+
     val recentTasks: StateFlow<List<TaskRecord>> = history.observeRecent(3)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

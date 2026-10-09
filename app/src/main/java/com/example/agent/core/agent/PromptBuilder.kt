@@ -32,6 +32,9 @@ object PromptBuilder {
                 youtube      https://www.youtube.com/results?search_query=your+terms
                 maps         https://www.google.com/maps/search/your+terms
                 a site       https://example.com
+              NEVER use launch_url to send a message or place a call. Links such as wa.me,
+              t.me, sms:, tel: and mailto: are refused. To message or call someone, open the
+              app and use its own interface, so the message is visible before it is sent.
             - open_app: reach an installed app by package name. If the observation already
               shows that app, it is open - do not open it again.
             - click: tap something on screen. Target it by its visible text first, then its

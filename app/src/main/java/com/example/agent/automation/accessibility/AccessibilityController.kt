@@ -6,6 +6,7 @@ import android.graphics.Path
 import android.graphics.Rect
 import android.os.Build
 import android.view.accessibility.AccessibilityNodeInfo
+import com.example.agent.core.control.AgentHalt
 import com.example.agent.domain.model.Bounds
 import com.example.agent.domain.model.ScreenSnapshot
 import com.example.agent.domain.model.UIElement
@@ -115,6 +116,7 @@ class AccessibilityController {
     // ---------------------------------------------------------------- interaction
 
     suspend fun click(target: TargetMatcher): ActionResult = withContext(Dispatchers.Main) {
+        if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
         // A node captured by an earlier snapshot can go stale once the window changes;
         // touching one throws IllegalStateException. That must not take down the task.
         runCatching {
@@ -126,6 +128,7 @@ class AccessibilityController {
     }
 
     suspend fun longClick(target: TargetMatcher): ActionResult = withContext(Dispatchers.Main) {
+        if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
         runCatching {
             val node = resolve(target) ?: return@withContext ActionResult.NotFound
             val clickable = clickableSelfOrAncestor(node) ?: return@withContext ActionResult.NotFound
@@ -135,6 +138,7 @@ class AccessibilityController {
     }
 
     suspend fun setText(target: TargetMatcher, text: String): ActionResult = withContext(Dispatchers.Main) {
+        if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
         val node = resolve(target) ?: focusedEditable() ?: return@withContext ActionResult.NotFound
         val args = android.os.Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
@@ -147,6 +151,7 @@ class AccessibilityController {
     }
 
     suspend fun scroll(direction: String?): ActionResult = withContext(Dispatchers.Main) {
+        if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
         val root = service?.rootInActiveWindow ?: return@withContext ActionResult.NotFound
 
         // The first scrollable in traversal order is often a small nested scroller, which
@@ -175,18 +180,25 @@ class AccessibilityController {
         }
     }
 
-    suspend fun swipe(fromX: Int, fromY: Int, toX: Int, toY: Int, durationMs: Long): ActionResult =
-        gesture(fromX, fromY, toX, toY, durationMs)
+    suspend fun swipe(fromX: Int, fromY: Int, toX: Int, toY: Int, durationMs: Long): ActionResult {
+        if (AgentHalt.isStopped) return ActionResult.Stopped
+        return gesture(fromX, fromY, toX, toY, durationMs)
+    }
 
-    suspend fun tap(x: Int, y: Int): ActionResult = gesture(x, y, x, y, 60)
+    suspend fun tap(x: Int, y: Int): ActionResult {
+        if (AgentHalt.isStopped) return ActionResult.Stopped
+        return gesture(x, y, x, y, 60)
+    }
 
     suspend fun pressBack(): ActionResult = withContext(Dispatchers.Main) {
+        if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
         val svc = service ?: return@withContext ActionResult.NotFound
         if (svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) ActionResult.Ok
         else ActionResult.Unsupported
     }
 
     suspend fun pressHome(): ActionResult = withContext(Dispatchers.Main) {
+        if (AgentHalt.isStopped) return@withContext ActionResult.Stopped
         val svc = service ?: return@withContext ActionResult.NotFound
         if (svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)) ActionResult.Ok
         else ActionResult.Unsupported
@@ -225,6 +237,7 @@ class AccessibilityController {
     // ---------------------------------------------------------------- helpers
 
     private suspend fun gesture(fromX: Int, fromY: Int, toX: Int, toY: Int, durationMs: Long): ActionResult {
+        if (AgentHalt.isStopped) return ActionResult.Stopped
         val svc = service ?: return ActionResult.NotFound
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return ActionResult.Unsupported
         return withContext(Dispatchers.Main) {
@@ -362,6 +375,9 @@ class AccessibilityController {
         data object Ok : ActionResult
         data object NotFound : ActionResult
         data object Unsupported : ActionResult
+
+        /** The user pressed Stop. Nothing was performed. */
+        data object Stopped : ActionResult
     }
 }
 

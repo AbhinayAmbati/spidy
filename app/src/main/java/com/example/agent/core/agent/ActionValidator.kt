@@ -34,6 +34,10 @@ class ActionValidator(private val registry: ToolRegistry) {
             ValidationResult.Valid -> Unit
         }
 
+        // Opening a URL is for the web. Messaging and calling links are refused here so
+        // the model is told why, rather than silently launching an app mid-task.
+        UrlPolicy.rejectionReason(action.url)?.let { return Outcome.Rejected(it) }
+
         if (tool.risk == ActionRisk.Sensitive) {
             return Outcome.RequiresConfirmation("This action is marked as sensitive.")
         }

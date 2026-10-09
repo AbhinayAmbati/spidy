@@ -113,7 +113,7 @@ fun HomeScreen(
                 message = progress.message,
                 step = progress.currentStep,
                 total = progress.totalSteps,
-                onStop = { },
+                onStop = viewModel::stop,
             )
         }
 

@@ -7,6 +7,7 @@ import com.example.agent.automation.accessibility.AccessibilityController
 import com.example.agent.automation.accessibility.AccessibilityController.ActionResult
 import com.example.agent.automation.accessibility.NotificationBridge
 import com.example.agent.automation.accessibility.TargetMatcher
+import com.example.agent.core.control.AgentHalt
 import com.example.agent.domain.model.ScreenSnapshot
 
 /**
@@ -62,6 +63,7 @@ class AndroidAutomationManager(
 
     /** Launches an installed app by package name using an official launch intent. */
     fun openApp(packageName: String): LaunchOutcome {
+        if (AgentHalt.isStopped) return LaunchOutcome.Failed("Stopped by the user.")
         val intent = context.packageManager.getLaunchIntentForPackage(packageName)
             ?: return LaunchOutcome.NotInstalled
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -77,11 +79,13 @@ class AndroidAutomationManager(
      * is the safe, documented alternative.
      */
     suspend fun closeApp(packageName: String): String {
+        if (AgentHalt.isStopped) return "Stopped by the user."
         controller.pressHome()
         return "Android does not allow apps to force-stop other apps. Returned to the home screen instead."
     }
 
     fun launchUrl(url: String): LaunchOutcome {
+        if (AgentHalt.isStopped) return LaunchOutcome.Failed("Stopped by the user.")
         val normalized = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(normalized))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

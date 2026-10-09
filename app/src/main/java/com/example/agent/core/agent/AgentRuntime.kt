@@ -5,6 +5,7 @@ import com.example.agent.automation.observer.ScreenObserver
 import com.example.agent.automation.tools.ToolRegistry
 import com.example.agent.core.ai.AIProvider
 import com.example.agent.core.ai.AgentJson
+import com.example.agent.core.control.AgentHalt
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AIProviderFactory
 import com.example.agent.data.preferences.SettingsRepository
@@ -79,10 +80,19 @@ class AgentRuntime(
 
     fun start(prompt: String) {
         if (isRunning) return
+        AgentHalt.clear()
         job = scope.launch { runTask(prompt) }
     }
 
+    /**
+     * Stops the task immediately, wherever it is.
+     *
+     * The halt gate is set *before* cancelling, so an action already in flight cannot
+     * start the next device operation, and any operation about to begin is refused.
+     * Cancelling the job alone left launches and gestures running.
+     */
     fun stop() {
+        AgentHalt.request()
         job?.cancel()
         job = null
         confirmation?.cancel()
@@ -165,6 +175,12 @@ class AgentRuntime(
         var lastObservation: String? = null
         val sigToObservation = mutableMapOf<String, String>()
         val repeatRefusals = mutableMapOf<String, Int>()
+        // Broader no-progress signals. The exact-repeat guard only catches identical
+        // arguments; these catch an agent that keeps doing *something* without the screen
+        // ever changing, or that hammers one tool.
+        var consecutiveUnchanged = 0
+        var consecutiveSameTool = 0
+        var lastTool: String? = null
         val messages = mutableListOf<AgentMessage>()
         messages += AgentMessage(MessageRole.System, PromptBuilder.systemPrompt(knownApps))
 
@@ -177,6 +193,28 @@ class AgentRuntime(
 
         try {
             for (step in 0 until TaskProgress.MAX_AGENT_STEPS) {
+                if (AgentHalt.isStopped) throw kotlinx.coroutines.CancellationException("Stopped by the user")
+
+                if (consecutiveUnchanged >= MAX_STALLED_STEPS) {
+                    finish(
+                        taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
+                        "Nothing on screen has changed for the last $consecutiveUnchanged steps, " +
+                            "so I stopped rather than keep repeating myself. Tell me the exact " +
+                            "element to use, or rephrase the task.",
+                    )
+                    return
+                }
+
+                if (consecutiveSameTool >= MAX_SAME_TOOL_STREAK) {
+                    finish(
+                        taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
+                        "I used ${lastTool ?: "the same tool"} $consecutiveSameTool times in a row " +
+                            "without finishing, so I stopped. That usually means the element I " +
+                            "need is not on screen - name it exactly, or rephrase the task.",
+                    )
+                    return
+                }
+
                 coroutineContext.ensureActive()
                 awaitResumeIfPaused()
                 coroutineContext.ensureActive()
@@ -216,6 +254,18 @@ class AgentRuntime(
                             "it doesn't support tool calling — try a different model in Settings.",
                     )
                     return
+                }
+
+                // Streak of one tool in a row. Repeatable tools (scroll, wait, back) are
+                // exempt, because using them several times in a row is legitimate.
+                if (action.action in ActionSignature.REPEATABLE_TOOLS) {
+                    lastTool = null
+                    consecutiveSameTool = 0
+                } else if (action.action == lastTool) {
+                    consecutiveSameTool++
+                } else {
+                    lastTool = action.action
+                    consecutiveSameTool = 1
                 }
 
                 val label = describe(action)
@@ -258,6 +308,7 @@ class AgentRuntime(
 
                 fun observationText(rendered: String): String {
                     val unchanged = rendered == lastObservation
+                    if (unchanged) consecutiveUnchanged++ else consecutiveUnchanged = 0
                     return (if (unchanged) UNCHANGED_NOTE else "") +
                         PromptBuilder.observationMessage(rendered)
                 }
@@ -323,6 +374,9 @@ class AgentRuntime(
                     recordResult("There is no tool called ${action.action}.")
                     continue
                 }
+
+                // Last gate before anything touches the device.
+                if (AgentHalt.isStopped) throw kotlinx.coroutines.CancellationException("Stopped by the user")
 
                 val result = tool.execute(action)
                 stepCount++
@@ -560,6 +614,12 @@ class AgentRuntime(
 
         /** How many times we refuse a repeat before ending the task instead of looping. */
         const val MAX_REPEAT_REFUSALS = 3
+
+        /** Consecutive steps with an unchanged screen before we stop for lack of progress. */
+        const val MAX_STALLED_STEPS = 4
+
+        /** Consecutive uses of one tool before we stop - the agent is hammering it. */
+        const val MAX_SAME_TOOL_STREAK = 4
 
         /** Prefix added when an action left the screen exactly as it was. */
         const val UNCHANGED_NOTE = "The screen is unchanged since your last action.\n\n"

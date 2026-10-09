@@ -37,6 +37,14 @@ class AgentForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Stop straight from the notification shade. The user should never have to find
+        // the app to halt a task that is driving their phone.
+        if (intent?.action == ACTION_STOP) {
+            runtime.stop()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Working…"))
 
@@ -70,11 +78,17 @@ class AgentForegroundService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val stop = PendingIntent.getService(
+            this, 1,
+            Intent(this, AgentForegroundService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.fgs_notification_title))
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(open)
+            .addAction(0, getString(R.string.fgs_stop), stop)
             .setOngoing(true)
             .build()
     }
@@ -93,6 +107,7 @@ class AgentForegroundService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "spidey_agent"
+        private const val ACTION_STOP = "com.example.agent.action.STOP"
         private const val NOTIFICATION_ID = 42
 
         fun start(context: Context) {

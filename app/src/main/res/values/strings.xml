@@ -48,5 +48,6 @@
     <!-- Notifications -->
     <string name="fgs_channel_name">Agent activity</string>
     <string name="fgs_channel_desc">Shows while the agent is working on a task.</string>
+    <string name="fgs_stop">Stop</string>
     <string name="fgs_notification_title">Spidey is working</string>
 </resources>

@@ -16,7 +16,7 @@ import com.example.agent.domain.model.ToolNames
 object ActionSignature {
 
     /** Tools that are expected to be called repeatedly, in the same form, on purpose. */
-    private val REPEATABLE_TOOLS = setOf(
+    val REPEATABLE_TOOLS = setOf(
         ToolNames.SCROLL,
         ToolNames.SWIPE,
         ToolNames.WAIT,

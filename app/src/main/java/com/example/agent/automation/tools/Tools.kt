@@ -122,6 +122,7 @@ class ClickTool(private val automation: AndroidAutomationManager) : BaseTool() {
                 "Could not find ${matcher.describe()} on screen. The screen may have changed " +
                     "since it was listed - call read_screen and target something in the new list.",
             )
+            ActionResult.Stopped -> ToolResult.Failure("Stopped by you.")
             ActionResult.Unsupported -> ToolResult.Failure("That element could not be tapped.")
         }
     }
@@ -144,6 +145,7 @@ class LongClickTool(private val automation: AndroidAutomationManager) : BaseTool
                 "Could not find ${matcher.describe()}. The screen may have changed - " +
                     "call read_screen and target something in the new list.",
             )
+            ActionResult.Stopped -> ToolResult.Failure("Stopped by you.")
             ActionResult.Unsupported -> ToolResult.Failure("Long-press is not supported there.")
         }
     }
@@ -162,6 +164,7 @@ class TypeTextTool(private val automation: AndroidAutomationManager) : BaseTool(
         return when (automation.typeText(matcher, action.text!!)) {
             ActionResult.Ok -> ToolResult.Success("Typed the text.")
             ActionResult.NotFound -> ToolResult.Failure("No editable field was found.")
+            ActionResult.Stopped -> ToolResult.Failure("Stopped by you.")
             ActionResult.Unsupported -> ToolResult.Failure("The field could not be filled.")
         }
     }
@@ -176,6 +179,7 @@ class ScrollTool(private val automation: AndroidAutomationManager) : BaseTool() 
         when (automation.scroll(action.direction)) {
             ActionResult.Ok -> ToolResult.Success("Scrolled ${action.direction ?: "forward"}.")
             ActionResult.NotFound -> ToolResult.Failure("Nothing scrollable was found.")
+            ActionResult.Stopped -> ToolResult.Failure("Stopped by you.")
             ActionResult.Unsupported -> ToolResult.Failure("This screen cannot be scrolled.")
         }
 }
@@ -201,6 +205,7 @@ class SwipeTool(private val automation: AndroidAutomationManager) : BaseTool() {
         return when (automation.swipe(fx, fy, tx, ty, d)) {
             ActionResult.Ok -> ToolResult.Success("Swiped ${action.direction ?: "up"}.")
             ActionResult.NotFound -> ToolResult.Failure("Could not swipe: screen size unknown.")
+            ActionResult.Stopped -> ToolResult.Failure("Stopped by you.")
             ActionResult.Unsupported -> ToolResult.Failure("Swipe gesture was rejected.")
         }
     }
@@ -214,6 +219,7 @@ class PressBackTool(private val automation: AndroidAutomationManager) : BaseTool
     override suspend fun execute(action: AgentAction): ToolResult =
         when (automation.pressBack()) {
             ActionResult.Ok -> ToolResult.Success("Went back.")
+            ActionResult.Stopped -> ToolResult.Failure("Stopped by you.")
             else -> ToolResult.Failure("Back is not available here.")
         }
 }
@@ -226,6 +232,7 @@ class PressHomeTool(private val automation: AndroidAutomationManager) : BaseTool
     override suspend fun execute(action: AgentAction): ToolResult =
         when (automation.pressHome()) {
             ActionResult.Ok -> ToolResult.Success("Returned home.")
+            ActionResult.Stopped -> ToolResult.Failure("Stopped by you.")
             else -> ToolResult.Failure("Home is not available here.")
         }
 }

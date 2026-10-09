@@ -57,6 +57,10 @@ Three things follow from this:
   insisting, the task stops with an explanation rather than spinning.
 - **Sensitive actions wait for you.** Anything that sends, pays, deletes, calls, installs or
   confirms pauses and asks for an explicit **Allow**.
+- **Stop halts it immediately, wherever it is.** Pressing Stop closes a gate that every
+  device action checks before it runs, so nothing new begins — and there is a **Stop** button
+  on the notification as well, so you do not have to find the app to halt a task that is
+  driving your phone.
 
 ---
 
@@ -124,6 +128,16 @@ not need to tap a new-tab button.
 
 If you want the agent to use a specific app's own search instead, say so — for example
 *"in the YouTube app, search for …"*.
+
+### Sending a message or calling
+
+`launch_url` is for the web, and it will **not** open messaging links. URLs that launch a
+messaging app with the message already written — `wa.me`, `t.me`, `api.whatsapp.com` — and
+the `sms:`, `tel:` and `mailto:` schemes are all refused, and the agent is told why.
+
+To send a message or place a call, the agent opens the app and works through its interface.
+That is deliberate: the message stays visible before it is sent, and the send itself is one of
+the actions that pauses for your **Allow**.
 
 ### Back, home and scrolling
 
@@ -202,6 +216,10 @@ underneath it. That line is the most useful thing to share.
 | "Could not find … on screen. The screen may have changed" | The element moved or went away | Usually transient — the agent re-reads and retries |
 | "No installed app matches …" | The app name did not resolve | Use the exact app name, or its package name |
 | A task runs many steps for something simple | The direct route was not taken | Say the outcome plainly, e.g. "search the web for …" |
+| "Nothing on screen has changed for the last N steps" | The agent was making no progress | Name the exact element it should use, or rephrase |
+| "I used X N times in a row without finishing" | The agent was hammering one tool | Name the element, or rephrase; it usually means what it needs is not on screen |
+| A message was not sent | Messaging links are refused by design | Ask it to open the messaging app and send from there |
+| The task kept going after Stop | Fixed — Stop now halts immediately | Update to v0.1.12 or later |
 
 ---
 
