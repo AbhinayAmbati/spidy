@@ -12,4 +12,11 @@ data class TaskRecord(
     val appsUsed: List<String>,
     val summary: String?,
     val steps: List<RecordedStep> = emptyList(),
-)
+    /** Totals for the whole task, so a run can be measured rather than guessed at. */
+    val inputTokens: Int = 0,
+    val outputTokens: Int = 0,
+    val modelMillis: Long = 0,
+) {
+    /** Time not spent waiting on the model: settle, screen reads, actions. */
+    val overheadMillis: Long get() = (durationMs - modelMillis).coerceAtLeast(0)
+}

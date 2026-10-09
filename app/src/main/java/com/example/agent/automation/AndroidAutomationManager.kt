@@ -6,6 +6,7 @@ import android.net.Uri
 import com.example.agent.automation.accessibility.AccessibilityController
 import com.example.agent.automation.accessibility.AccessibilityController.ActionResult
 import com.example.agent.automation.accessibility.NotificationBridge
+import com.example.agent.automation.accessibility.SettleGate
 import com.example.agent.automation.accessibility.TargetMatcher
 import com.example.agent.core.control.AgentHalt
 import com.example.agent.domain.model.ScreenSnapshot
@@ -99,9 +100,14 @@ class AndroidAutomationManager(
 
     suspend fun readScreen(): ScreenSnapshot = controller.snapshot()
 
-    /** Waits for the UI to stop changing, so the next observation is stable. */
-    suspend fun awaitUiSettled(quietMs: Long = 500, timeoutMs: Long = 4_000): Boolean =
-        controller.awaitIdle(quietMs, timeoutMs)
+    /**
+     * Waits for the UI to stop changing.
+     * @return true if the screen changed; false means the caller can skip reading it.
+     */
+    suspend fun awaitUiSettled(
+        quietMs: Long = SettleGate.DEFAULT_QUIET_MS,
+        timeoutMs: Long = SettleGate.DEFAULT_TIMEOUT_MS,
+    ): Boolean = controller.awaitSettle(quietMs, timeoutMs)
 
     fun isAccessibilityReady(): Boolean = controller.isAvailable()
 

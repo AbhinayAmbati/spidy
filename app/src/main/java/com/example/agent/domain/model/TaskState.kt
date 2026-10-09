@@ -29,6 +29,8 @@ data class TaskStep(
     val status: StepStatus,
     /** Why the step failed, or a short note. Shown in the UI so failures are not silent. */
     val detail: String? = null,
+    /** Where this step's time went. */
+    val metrics: StepMetrics? = null,
 )
 
 enum class StepStatus { Pending, Running, Done, Failed }

@@ -225,7 +225,42 @@ result.
 
 ---
 
-## 6. When something fails
+## 6. Routines
+
+Finish a task and tap **Save as routine**. That task can then be replayed from
+**Settings → Routines** with **no model calls at all** — no round trips, no tokens, and it
+works even without an API key configured.
+
+A routine is a recording of what worked, so it is only valid while the screens it touches
+look the same. Every step is checked as it runs, and if one no longer matches the agent
+hands over to the model from that point rather than failing. A stale routine degrades into a
+normal run.
+
+Use routines for things you do the same way every time — a daily check, a recurring search,
+a fixed sequence. Use the normal agent for anything that varies.
+
+---
+
+## 7. Measuring a task
+
+Open **History** and tap any task. Under **Performance** you get where the time actually went:
+
+- **Waiting on the model** — network plus inference.
+- **On the device** — settling, reading the screen, and performing actions.
+- **Tokens** — input and output for the whole task.
+
+Those two halves need completely different fixes, so it is worth knowing which one dominates
+your runs. On a slow provider the model half is usually most of it, and the fix is a faster
+model rather than anything in the app.
+
+**Copy diagnostics** puts a full plain-text report on the clipboard — version, device,
+provider, the timing split, and every step with its own timings and failure reason. Paste it
+into a message and a problem can be diagnosed from the report instead of from a screenshot.
+It contains no screen content beyond the failure reasons the app already shows you.
+
+---
+
+## 8. When something fails
 
 Open **History** and tap the task. Every step is listed, and a failed step shows **why**
 underneath it. That line is the most useful thing to share.
@@ -249,7 +284,7 @@ underneath it. That line is the most useful thing to share.
 
 ---
 
-## 7. Cost
+## 9. Cost
 
 Spidey is billed by your AI provider, and **almost all of it is input tokens** — the text
 sent *to* the model, not the text it writes back. A real bill looked like this:
@@ -306,7 +341,7 @@ worth checking, and it is a provider setting, not something the app controls.
 
 ---
 
-## 8. Limits
+## 10. Limits
 
 - **No screenshots.** Spidey reads the accessibility tree, not pixels. Apps that expose
   nothing useful to accessibility are out of reach.

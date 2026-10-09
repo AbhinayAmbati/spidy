@@ -42,6 +42,7 @@ fun SettingsScreen(
     onOpenProvider: () -> Unit,
     onOpenOnboarding: () -> Unit,
     onOpenMemory: () -> Unit,
+    onOpenRoutines: () -> Unit,
     onOpenTerms: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -165,6 +166,12 @@ fun SettingsScreen(
             SecondaryButton(
                 text = "Manage memory",
                 onClick = onOpenMemory,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(SpideySpacing.md))
+            SecondaryButton(
+                text = "Routines",
+                onClick = onOpenRoutines,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

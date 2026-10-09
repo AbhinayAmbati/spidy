@@ -11,8 +11,13 @@ package com.example.agent.automation.accessibility
  */
 object SettleGate {
 
-    /** How long the screen must be quiet before we read it. */
-    const val DEFAULT_QUIET_MS = 500L
+    /**
+     * How long the screen must be quiet before we read it.
+     *
+     * Was 500 ms. Now that settling is driven by the platform's own change events rather than
+     * by polling the tree, a shorter window is enough, and it is paid on every step.
+     */
+    const val DEFAULT_QUIET_MS = 300L
 
     /** Upper bound on the wait, in case the screen never settles. */
     const val DEFAULT_TIMEOUT_MS = 4_000L
@@ -34,4 +39,13 @@ object SettleGate {
 
     fun isTimedOut(nowMillis: Long, startedAtMillis: Long, timeoutMs: Long = DEFAULT_TIMEOUT_MS): Boolean =
         nowMillis - startedAtMillis >= timeoutMs
+
+    /**
+     * Whether the screen changed at all since we started waiting.
+     *
+     * When it did not, the caller skips reading the screen: it is byte-for-byte what the model
+     * already has, so both the traversal and the listing would be wasted.
+     */
+    fun changedDuring(lastChangeMillis: Long, startedAtMillis: Long): Boolean =
+        lastChangeMillis >= startedAtMillis
 }

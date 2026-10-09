@@ -36,11 +36,12 @@ _add("com.example.agent.core.ai",
 _add("com.example.agent.domain.model",
      "AgentAction ActionTarget ToolNames AgentMessage AgentResponse MessageRole ToolResult "
      "TaskStep StepStatus RecordedStep TaskState TaskProgress ScreenSnapshot UIElement "
-     "Bounds ActionRisk AwaitingKind MemoryEntry ElementKey inVisualOrder")
+     "Bounds ActionRisk AwaitingKind MemoryEntry ElementKey inVisualOrder Routine RoutineStep")
 _add("com.example.agent.automation.tools", "ToolSchemas ToolRegistry")
 _add("com.example.agent.automation.accessibility", "TargetMatcher AccessibilityBridge UserTouchGate SettleGate")
 _add("com.example.agent.automation", "AndroidAutomationManager")
 _add("com.example.agent.core.agent", "ActionValidator PromptBuilder AgentRuntime ActionSignature UrlPolicy ContextCompactor")
+_add("com.example.agent.data.repository", "RoutineRepository")
 _add("com.example.agent.core.control", "AgentHalt")
 _add("com.example.agent.core.permissions", "PermissionUtils")
 

@@ -6,10 +6,12 @@ import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AgentToolSpec
 import com.example.agent.core.ai.parseObjectOrEmpty
+import com.example.agent.domain.model.AgentActionCall
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
 import com.example.agent.domain.model.MessageRole
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -51,8 +53,7 @@ class AnthropicProvider(
             put("temperature", 0)
             if (system.isNotBlank()) put("system", system)
             put("messages", JsonArray(
-                messages.filter { it.role != MessageRole.System }
-                    .map { it.toAnthropicMessage() }
+                messages.filter { it.role != MessageRole.System }.toAnthropicMessages()
             ))
             if (tools.isNotEmpty()) {
                 put("tools", JsonArray(tools.map { it.toAnthropicTool() }))
@@ -82,22 +83,38 @@ class AnthropicProvider(
         val root = runCatching { AgentJson.parseToJsonElement(raw) as? JsonObject }.getOrNull()
             ?: return AgentResponse(message = null, raw = raw)
 
-        val blocks = root["content"] as? JsonArray ?: return AgentResponse(message = null, raw = raw)
+        val usage = root["usage"] as? JsonObject
+        val inputTokens = (usage?.get("input_tokens") as? JsonPrimitive)?.content?.toIntOrNull()
+        val outputTokens = (usage?.get("output_tokens") as? JsonPrimitive)?.content?.toIntOrNull()
+
+        val blocks = root["content"] as? JsonArray
+            ?: return AgentResponse(message = null, raw = raw, inputTokens = inputTokens, outputTokens = outputTokens)
+
         var text: String? = null
+        val calls = mutableListOf<AgentActionCall>()
         for (block in blocks) {
             val obj = block as? JsonObject ?: continue
             when ((obj["type"] as? JsonPrimitive)?.content) {
                 "text" -> text = (obj["text"] as? JsonPrimitive)?.content
+                // Anthropic can return several tool_use blocks in one turn.
                 "tool_use" -> {
+                    val id = (obj["id"] as? JsonPrimitive)?.content
                     val name = (obj["name"] as? JsonPrimitive)?.content
-                    val input = obj["input"] as? JsonObject
-                    AgentActionCodec.fromToolCall(name, input)?.let {
-                        return AgentResponse(action = it, raw = raw)
-                    }
+                    AgentActionCodec.fromToolCall(name, obj["input"] as? JsonObject)
+                        ?.let { calls += AgentActionCall(id, it) }
                 }
             }
         }
-        return AgentResponse(message = text, raw = raw)
+
+        if (calls.isNotEmpty()) {
+            return AgentResponse(
+                calls = calls,
+                raw = raw,
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+            )
+        }
+        return AgentResponse(message = text, raw = raw, inputTokens = inputTokens, outputTokens = outputTokens)
     }
 
 
@@ -133,12 +150,12 @@ internal fun AgentMessage.toAnthropicMessage(): JsonObject = buildJsonObject {
                 if (content.isNotBlank()) {
                     add(buildJsonObject { put("type", "text"); put("text", content) })
                 }
-                if (name != null && toolCallId != null) {
+                toolCalls.forEach { call ->
                     add(buildJsonObject {
                         put("type", "tool_use")
-                        put("id", toolCallId)
-                        put("name", name)
-                        put("input", parseObjectOrEmpty(toolArguments))
+                        put("id", call.id)
+                        put("name", call.name)
+                        put("input", parseObjectOrEmpty(call.arguments))
                     })
                 }
             }
@@ -148,7 +165,8 @@ internal fun AgentMessage.toAnthropicMessage(): JsonObject = buildJsonObject {
             ))
         }
 
-        // Anthropic delivers tool results inside a *user* turn, not a "tool" role.
+        // Anthropic delivers tool results inside a *user* turn, not a "tool" role. Consecutive
+        // results are merged into one such turn by toAnthropicMessages().
         role == MessageRole.Tool -> {
             put("role", "user")
             put("content", JsonArray(listOf(buildJsonObject {
@@ -163,6 +181,39 @@ internal fun AgentMessage.toAnthropicMessage(): JsonObject = buildJsonObject {
             put("content", content)
         }
     }
+}
+
+/**
+ * Anthropic expects every tool result for one assistant turn inside a SINGLE user message.
+ * Because the loop can batch several actions per turn, consecutive Tool messages are merged
+ * into one user turn carrying several tool_result blocks. Sending them as separate user turns
+ * risks a same-role sequence Anthropic rejects.
+ */
+internal fun List<AgentMessage>.toAnthropicMessages(): List<JsonObject> {
+    val out = mutableListOf<JsonObject>()
+    var i = 0
+    while (i < size) {
+        if (this[i].role == MessageRole.Tool) {
+            val blocks = mutableListOf<JsonElement>()
+            while (i < size && this[i].role == MessageRole.Tool) {
+                val result = this[i]
+                blocks += buildJsonObject {
+                    put("type", "tool_result")
+                    put("tool_use_id", result.toolCallId.orEmpty())
+                    put("content", result.content)
+                }
+                i++
+            }
+            out += buildJsonObject {
+                put("role", "user")
+                put("content", JsonArray(blocks))
+            }
+        } else {
+            out += this[i].toAnthropicMessage()
+            i++
+        }
+    }
+    return out
 }
 
 private fun AgentToolSpec.toAnthropicTool(): JsonObject = buildJsonObject {

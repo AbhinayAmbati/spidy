@@ -5,6 +5,7 @@ import com.example.agent.core.ai.AgentActionCodec
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AgentToolSpec
+import com.example.agent.domain.model.AgentActionCall
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
 import com.example.agent.domain.model.MessageRole
@@ -84,6 +85,11 @@ class OpenAICompatibleProvider(
                 "The provider did not return a JSON object: ${raw.take(200)}",
             )
 
+        // Usage is optional; some OpenAI-compatible gateways omit it.
+        val usage = root["usage"] as? JsonObject
+        val inputTokens = (usage?.get("prompt_tokens") as? JsonPrimitive)?.content?.toIntOrNull()
+        val outputTokens = (usage?.get("completion_tokens") as? JsonPrimitive)?.content?.toIntOrNull()
+
         val choices = root["choices"] as? JsonArray
             ?: throw AIProviderException(
                 AIProviderException.Kind.Parse,
@@ -96,21 +102,36 @@ class OpenAICompatibleProvider(
                 "The provider's response had no message: ${raw.take(200)}",
             )
 
-        val toolCall = (message["tool_calls"] as? JsonArray)?.firstOrNull() as? JsonObject
-        val function = toolCall?.get("function") as? JsonObject
-        val toolName = (function?.get("name") as? JsonPrimitive)?.content
-        val arguments = when (val el = function?.get("arguments")) {
-            is JsonPrimitive -> el.content
-            is JsonObject -> el.toString() // a few gateways send an object, not a string
-            else -> null
+        // Every call, not just the first: the loop batches, so one turn can carry several.
+        val calls = (message["tool_calls"] as? JsonArray).orEmpty().mapNotNull { element ->
+            val call = element as? JsonObject ?: return@mapNotNull null
+            val function = call["function"] as? JsonObject
+            val toolName = (function?.get("name") as? JsonPrimitive)?.content
+            val arguments = when (val el = function?.get("arguments")) {
+                is JsonPrimitive -> el.content
+                is JsonObject -> el.toString() // a few gateways send an object, not a string
+                else -> null
+            }
+            AgentActionCodec.fromToolCallJson(toolName, arguments)
+                ?.let { AgentActionCall((call["id"] as? JsonPrimitive)?.content, it) }
         }
 
-        AgentActionCodec.fromToolCallJson(toolName, arguments)?.let {
-            return AgentResponse(action = it, raw = raw)
+        if (calls.isNotEmpty()) {
+            return AgentResponse(
+                calls = calls,
+                raw = raw,
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+            )
         }
 
         val content = (message["content"] as? JsonPrimitive)?.content
-        return AgentResponse(message = content, raw = raw)
+        return AgentResponse(
+            message = content,
+            raw = raw,
+            inputTokens = inputTokens,
+            outputTokens = outputTokens,
+        )
     }
 
     /**
@@ -183,17 +204,20 @@ internal fun AgentMessage.toOpenAiMessage(): JsonObject = buildJsonObject {
             put("content", content)
         }
 
-        // Replay the model's own call verbatim so its history reads as real tool use.
-        role == MessageRole.Assistant && name != null && toolCallId != null -> {
+        // Replay the model's own calls verbatim so its history reads as real tool use.
+        // A turn may carry several: the loop batches steps.
+        role == MessageRole.Assistant && toolCalls.isNotEmpty() -> {
             put("content", if (content.isBlank()) JsonNull else JsonPrimitive(content))
-            put("tool_calls", JsonArray(listOf(buildJsonObject {
-                put("id", toolCallId)
-                put("type", "function")
-                put("function", buildJsonObject {
-                    put("name", name)
-                    put("arguments", toolArguments ?: "{}")
-                })
-            })))
+            put("tool_calls", JsonArray(toolCalls.map { call ->
+                buildJsonObject {
+                    put("id", call.id)
+                    put("type", "function")
+                    put("function", buildJsonObject {
+                        put("name", call.name)
+                        put("arguments", call.arguments)
+                    })
+                }
+            }))
         }
 
         else -> put("content", content)

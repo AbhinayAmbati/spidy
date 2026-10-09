@@ -228,6 +228,10 @@ class AccessibilityController {
     /**
      * Waits until the screen stops changing.
      *
+     * @return true if the screen changed at all while waiting. When it did not, the caller
+     *   can skip reading the screen entirely: it is byte-for-byte what the model already has,
+     *   so both the traversal and the listing would be wasted.
+     *
      * This used to poll the view tree: two traversals of up to 80 nodes every 120 ms, for as
      * long as four seconds, on every single step - thousands of node visits on the main
      * thread per step, and up to 40 seconds of it across a ten-step task. It now watches the
@@ -237,15 +241,19 @@ class AccessibilityController {
      * A change that happened before this call does not count, so the quiet window always
      * starts from the action we are waiting on.
      */
-    suspend fun awaitIdle(quietMs: Long = 500, timeoutMs: Long = 4_000): Boolean {
+    suspend fun awaitSettle(
+        quietMs: Long = SettleGate.DEFAULT_QUIET_MS,
+        timeoutMs: Long = SettleGate.DEFAULT_TIMEOUT_MS,
+    ): Boolean {
         if (service == null) return false
         val started = SystemClock.uptimeMillis()
         while (true) {
             val now = SystemClock.uptimeMillis()
             if (SettleGate.isSettled(now, AccessibilityBridge.lastScreenChangeMillis(), started, quietMs)) {
-                return true
+                // A change at or after we started waiting means the action did something.
+                return SettleGate.changedDuring(AccessibilityBridge.lastScreenChangeMillis(), started)
             }
-            if (SettleGate.isTimedOut(now, started, timeoutMs)) return false
+            if (SettleGate.isTimedOut(now, started, timeoutMs)) return true
             delay(SettleGate.TICK_MS)
         }
     }

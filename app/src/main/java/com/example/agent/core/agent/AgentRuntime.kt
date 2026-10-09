@@ -18,15 +18,19 @@ import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.ActionTarget
 import com.example.agent.domain.model.AwaitingKind
 import com.example.agent.domain.model.AgentAction
+import com.example.agent.domain.model.AgentActionCall
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
 import com.example.agent.domain.model.MessageRole
 import com.example.agent.domain.model.RecordedStep
+import com.example.agent.domain.model.Routine
+import com.example.agent.domain.model.StepMetrics
 import com.example.agent.domain.model.StepStatus
 import com.example.agent.domain.model.TaskProgress
 import com.example.agent.domain.model.TaskRecord
 import com.example.agent.domain.model.TaskState
 import com.example.agent.domain.model.TaskStep
+import com.example.agent.domain.model.ToolCall
 import com.example.agent.domain.model.ToolNames
 import com.example.agent.domain.model.ToolResult
 import kotlinx.coroutines.CompletableDeferred
@@ -88,6 +92,10 @@ class AgentRuntime(
 
     private var taskStartedAtMillis: Long = 0L
 
+    /** Actions of the most recent completed task, so it can be saved as a routine. */
+    @Volatile
+    private var lastRecordedActions: List<AgentAction> = emptyList()
+
     init {
         // Kept hot so the touch handler never has to hit DataStore on a touch.
         scope.launch {
@@ -122,8 +130,26 @@ class AgentRuntime(
         if (isRunning) return
         taskStartedAtMillis = SystemClock.uptimeMillis()
         AgentHalt.clear()
-        job = scope.launch { runTask(prompt) }
+        job = scope.launch { runTask(prompt, routine = null) }
     }
+
+    /**
+     * Replays a recorded routine with no model involved.
+     *
+     * The cheapest and most reliable path the app has: no round trips, no tokens. It is also
+     * the most fragile, because it assumes the screens still look the way they did when it
+     * was recorded - so every step is verified as it runs and the agent hands over to the
+     * model the moment one does not match.
+     */
+    fun startRoutine(routine: Routine) {
+        if (isRunning) return
+        taskStartedAtMillis = SystemClock.uptimeMillis()
+        AgentHalt.clear()
+        job = scope.launch { runTask(routine.prompt, routine = routine) }
+    }
+
+    /** Actions of the most recent task that completed, for saving as a routine. */
+    fun lastSuccessfulActions(): List<AgentAction> = lastRecordedActions.toList()
 
     /**
      * Stops the task immediately, wherever it is.
@@ -176,11 +202,12 @@ class AgentRuntime(
 
     // ------------------------------------------------------------------ the loop
 
-    private suspend fun runTask(prompt: String) {
+    private suspend fun runTask(prompt: String, routine: Routine?) {
         val startedAt = System.currentTimeMillis()
         val taskId = UUID.randomUUID().toString()
         val appsUsed = linkedSetOf<String>()
         val steps = mutableListOf<TaskStep>()
+        val actionsTaken = mutableListOf<AgentAction>()
         var stepCount = 0
 
         _progress.value = TaskProgress(
@@ -199,15 +226,18 @@ class AgentRuntime(
             return
         }
 
-        val provider: AIProvider
         val knownApps = runCatching { memory.snapshot() }.getOrDefault(emptyList())
-        try {
-            val config = settings.currentProviderConfig()
-            provider = providerFactory.create(config)
-        } catch (e: Exception) {
-            finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED, friendly(e))
-            return
+
+        // Created on demand: a replay needs no model at all, and therefore no key.
+        var provider: AIProvider? = null
+        suspend fun ensureProvider(): AIProvider {
+            provider?.let { return it }
+            return providerFactory.create(settings.currentProviderConfig()).also { provider = it }
         }
+
+        // Replay until a step does not match, then hand over to the model from that point.
+        var replayIndex = 0
+        var replaying = routine != null
 
         var nudges = 0
         // Loop protection. The most common failure is running the same action over and
@@ -223,14 +253,21 @@ class AgentRuntime(
         var consecutiveSameTool = 0
         var lastTool: String? = null
         val messages = mutableListOf<AgentMessage>()
-        messages += AgentMessage(MessageRole.System, PromptBuilder.systemPrompt(knownApps))
+        var conversationStarted = false
 
-        val observation = observer.observe()
-        observation.snapshot.packageName?.let { appsUsed.add(it) }
-        messages += AgentMessage(
-            MessageRole.User,
-            PromptBuilder.initialUserMessage(prompt, observation.rendered),
-        )
+        // A replay begins with no conversation at all; this builds one only when the model is
+        // actually needed, with the screen as it is then rather than as it was.
+        suspend fun beginConversation() {
+            if (conversationStarted) return
+            conversationStarted = true
+            messages += AgentMessage(MessageRole.System, PromptBuilder.systemPrompt(knownApps))
+            val opening = observer.observe()
+            opening.snapshot.packageName?.let { appsUsed.add(it) }
+            messages += AgentMessage(
+                MessageRole.User,
+                PromptBuilder.initialUserMessage(prompt, opening.rendered),
+            )
+        }
 
         try {
             for (step in 0 until TaskProgress.MAX_AGENT_STEPS) {
@@ -266,11 +303,46 @@ class AgentRuntime(
                     message = "Thinking…",
                 )
 
-                val response: AgentResponse = provider.generateResponse(messages, registry.specs())
-                val action = response.action
+                val calls: List<AgentActionCall>
+                var modelMillis = 0L
+                var response: AgentResponse? = null
 
-                if (action == null) {
-                    val said = response.message?.takeIf { it.isNotBlank() }
+                val replayed = if (replaying) routine?.steps?.getOrNull(replayIndex) else null
+                if (replaying && replayed == null) {
+                    finish(
+                        taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.COMPLETED,
+                        "Replayed the routine with no model involved.",
+                    )
+                    return
+                }
+
+                if (replaying) {
+                    val decoded = runCatching {
+                        AgentJson.decodeFromString(AgentAction.serializer(), replayed!!.actionJson)
+                    }.getOrNull()
+                    if (decoded == null) {
+                        // A stored step we cannot read is a mismatch like any other.
+                        replaying = false
+                        continue
+                    }
+                    calls = listOf(AgentActionCall(null, decoded))
+                    replayIndex++
+                } else {
+                    val modelStartedAt = SystemClock.uptimeMillis()
+                    beginConversation()
+                    val generated = try {
+                        ensureProvider().generateResponse(messages, registry.specs())
+                    } catch (e: Exception) {
+                        finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED, friendly(e))
+                        return
+                    }
+                    modelMillis = SystemClock.uptimeMillis() - modelStartedAt
+                    response = generated
+                    calls = generated.calls
+                }
+
+                if (calls.isEmpty()) {
+                    val said = response?.message?.takeIf { it.isNotBlank() }
                     if (said != null) messages += AgentMessage(MessageRole.Assistant, said)
 
                     // A reply with no tool call is NOT a finished task: completion always
@@ -297,115 +369,149 @@ class AgentRuntime(
                     return
                 }
 
-                // Streak of one tool in a row. Repeatable tools (scroll, wait, back) are
-                // exempt, because using them several times in a row is legitimate.
-                if (action.action in ActionSignature.REPEATABLE_TOOLS) {
-                    lastTool = null
-                    consecutiveSameTool = 0
-                } else if (action.action == lastTool) {
-                    consecutiveSameTool++
-                } else {
-                    lastTool = action.action
-                    consecutiveSameTool = 1
-                }
-
-                val label = describe(action)
-                val index = steps.size
-                steps += TaskStep(index, label, StepStatus.Running)
-                _progress.value = _progress.value.copy(
-                    state = TaskState.EXECUTING,
-                    steps = steps.toList(),
-                    currentStep = step,
-                    message = label,
-                )
-
-                // The model's call is recorded as a real tool-call turn, and every result
-                // below is paired back to it by id. It used to be a plain-text
-                // "action: click" line, which the model could not reliably read back.
-                val callId = "call_$step"
-                val callArguments = runCatching {
-                    AgentJson.encodeToString(AgentAction.serializer(), action)
-                }.getOrDefault("{}")
-
-                fun recordCall() {
-                    messages += AgentMessage(
-                        role = MessageRole.Assistant,
-                        content = "",
-                        toolCallId = callId,
-                        name = action.action,
-                        toolArguments = callArguments,
+                // One assistant turn carrying every call it made, so the history replays as
+                // real tool use and each result can be paired back by id. Batching is what
+                // keeps a multi-action task to a single round trip.
+                val callRefs = calls.mapIndexed { i, call ->
+                    ToolCall(
+                        id = call.id ?: "call_${step}_$i",
+                        name = call.action.action,
+                        arguments = encodeAction(call.action),
                     )
                 }
+                messages += AgentMessage(MessageRole.Assistant, "", toolCalls = callRefs)
 
-                fun recordResult(text: String) {
-                    messages += AgentMessage(
-                        role = MessageRole.Tool,
-                        content = text,
-                        toolCallId = callId,
-                        name = action.action,
+                for ((callIndex, call) in calls.withIndex()) {
+                    val action = call.action
+                    val callRef = callRefs[callIndex]
+
+                    // Streak of one tool in a row. Repeatable tools (scroll, wait, back) are
+                    // exempt, because using them several times in a row is legitimate.
+                    if (action.action in ActionSignature.REPEATABLE_TOOLS) {
+                        lastTool = null
+                        consecutiveSameTool = 0
+                    } else if (action.action == lastTool) {
+                        consecutiveSameTool++
+                    } else {
+                        lastTool = action.action
+                        consecutiveSameTool = 1
+                    }
+
+                    val label = describe(action)
+                    val index = steps.size
+                    steps += TaskStep(index, label, StepStatus.Running)
+                    _progress.value = _progress.value.copy(
+                        state = TaskState.EXECUTING,
+                        steps = steps.toList(),
+                        currentStep = step,
+                        message = label,
                     )
-                    trim(messages)
-                }
 
-                fun observationText(rendered: String): String {
-                    val unchanged = rendered == lastObservation
-                    if (unchanged) consecutiveUnchanged++ else consecutiveUnchanged = 0
-                    // Re-sending an identical listing is the single most wasteful thing the
-                    // loop did: the same ~2,500 tokens carrying no new information. The model
-                    // already has it from the previous step.
-                    return if (unchanged) UNCHANGED_NOTE else PromptBuilder.observationMessage(rendered)
-                }
-
-                // ---- repeat guard -------------------------------------------------
-                // Refuse to re-run an action whose arguments are identical to one that
-                // already ran and left the screen exactly as it is. If the model keeps
-                // insisting, stop rather than spin.
-                val sig = ActionSignature.of(action)
-                val previousObservation = sig?.let { sigToObservation[it] }
-                if (sig != null && previousObservation != null && previousObservation == lastObservation) {
-                    val refusals = (repeatRefusals[sig] ?: 0) + 1
-                    repeatRefusals[sig] = refusals
-
-                    if (refusals >= MAX_REPEAT_REFUSALS) {
-                        markStep(steps, index, StepStatus.Failed, "Repeated with no progress")
-                        finish(
-                            taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
-                            "I kept repeating the same action and the screen never changed, so I " +
-                                "stopped instead of looping. Name the exact element you want tapped, " +
-                                "or try rephrasing.",
+                    fun recordResult(text: String) {
+                        messages += AgentMessage(
+                            role = MessageRole.Tool,
+                            content = text,
+                            toolCallId = callRef.id,
+                            name = callRef.name,
                         )
-                        return
+                        trim(messages)
                     }
 
-                    markStep(steps, index, StepStatus.Failed, "Already tried — nothing changed")
-                    recordCall()
-                    recordResult(
-                        "You already ran this exact action and the screen has NOT changed. " +
-                            "Running it again will not help. Do something different now: " +
-                            "read_screen, scroll to reveal the element, choose a different " +
-                            "element, or call finish if the task is already done.",
-                    )
-                    continue
-                }
+                    // Declared before the local functions below: a local function can only see
+                    // variables declared above it, and observeAfterAction needs this.
+                    val sig = ActionSignature.of(action)
 
-                when (val outcome = validator.validate(action, step)) {
-                    is ActionValidator.Outcome.Rejected -> {
-                        markStep(steps, index, StepStatus.Failed, outcome.reason)
-                        recordCall()
-                        recordResult("That action was not allowed: ${outcome.reason}")
-                        continue
-                    }
-                    is ActionValidator.Outcome.RequiresConfirmation -> {
-                        val allowed = awaitConfirmation(action, outcome.reason)
-                        if (!allowed) {
-                            markStep(steps, index, StepStatus.Failed, "You declined this action.")
-                            recordCall()
-                            recordResult(
-                                "The user declined this action. Do not repeat it; try another " +
-                                    "route, or use ask_user if you need a decision.",
-                            )
-                            continue
+                    data class AfterAction(val text: String, val settleMillis: Long, val observeMillis: Long)
+
+                    /**
+                     * The one place that decides what the model is told about the screen after an
+                     * action.
+                     *
+                     * When no window-change event arrived, the screen is byte-for-byte what the
+                     * model already has, so both the traversal and the listing are skipped — the
+                     * single biggest per-step saving, and it applies to every no-op action.
+                     */
+                    suspend fun observeAfterAction(): AfterAction {
+                        val settleStartedAt = SystemClock.uptimeMillis()
+                        val changed = automation.awaitUiSettled()
+                        val settleMillis = SystemClock.uptimeMillis() - settleStartedAt
+
+                        if (!changed) {
+                            consecutiveUnchanged++
+                            return AfterAction(UNCHANGED_NOTE, settleMillis, 0)
                         }
+
+                        val observeStartedAt = SystemClock.uptimeMillis()
+                        val next = observer.observe()
+                        val observeMillis = SystemClock.uptimeMillis() - observeStartedAt
+                        next.snapshot.packageName?.let { appsUsed.add(it) }
+
+                        val rendered = next.rendered
+                        // A change event can still render identically (an animation, say).
+                        val same = rendered == lastObservation
+                        consecutiveUnchanged = if (same) consecutiveUnchanged + 1 else 0
+                        lastObservation = rendered
+                        sig?.let { sigToObservation[it] = rendered }
+
+                        val text = if (same) UNCHANGED_NOTE else PromptBuilder.observationMessage(rendered)
+                        return AfterAction(text, settleMillis, observeMillis)
+                    }
+
+                    fun metricsFor(after: AfterAction, actionMillis: Long) = StepMetrics(
+                        modelMillis = modelMillis,
+                        settleMillis = after.settleMillis,
+                        observeMillis = after.observeMillis,
+                        actionMillis = actionMillis,
+                        inputTokens = response?.inputTokens ?: 0,
+                        outputTokens = response?.outputTokens ?: 0,
+                    )
+
+                    // ---- repeat guard -------------------------------------------------
+                    // Refuse to re-run an action whose arguments are identical to one that
+                    // already ran and left the screen exactly as it is. If the model keeps
+                    // insisting, stop rather than spin.
+                    val previousObservation = sig?.let { sigToObservation[it] }
+                    if (sig != null && previousObservation != null && previousObservation == lastObservation) {
+                        val refusals = (repeatRefusals[sig] ?: 0) + 1
+                        repeatRefusals[sig] = refusals
+
+                        if (refusals >= MAX_REPEAT_REFUSALS) {
+                            markStep(steps, index, StepStatus.Failed, "Repeated with no progress")
+                            finish(
+                                taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
+                                "I kept repeating the same action and the screen never changed, so I " +
+                                    "stopped instead of looping. Name the exact element you want tapped, " +
+                                    "or try rephrasing.",
+                            )
+                            return
+                        }
+
+                        markStep(steps, index, StepStatus.Failed, "Already tried — nothing changed")
+                        recordResult(
+                            "You already ran this exact action and the screen has NOT changed. " +
+                                "Running it again will not help. Do something different now: " +
+                                "read_screen, scroll to reveal the element, choose a different " +
+                                "element, or call finish if the task is already done.",
+                        )
+                        break
+                    }
+
+                    when (val outcome = validator.validate(action, step)) {
+                        is ActionValidator.Outcome.Rejected -> {
+                            markStep(steps, index, StepStatus.Failed, outcome.reason)
+                            recordResult("That action was not allowed: ${outcome.reason}")
+                            break
+                        }
+                        is ActionValidator.Outcome.RequiresConfirmation -> {
+                            val allowed = awaitConfirmation(action, outcome.reason)
+                            if (!allowed) {
+                                markStep(steps, index, StepStatus.Failed, "You declined this action.")
+                                recordResult(
+                                    "The user declined this action. Do not repeat it; try another " +
+                                        "route, or use ask_user if you need a decision.",
+                                )
+                                break
+                            }
                     }
                     ActionValidator.Outcome.Allowed -> Unit
                 }
@@ -413,49 +519,51 @@ class AgentRuntime(
                 val tool = registry.find(action.action)
                 if (tool == null) {
                     markStep(steps, index, StepStatus.Failed, "Unknown tool: ${action.action}")
-                    recordCall()
                     recordResult("There is no tool called ${action.action}.")
-                    continue
+                    break
                 }
 
                 // Last gate before anything touches the device.
                 if (AgentHalt.isStopped) throw kotlinx.coroutines.CancellationException("Stopped by the user")
 
+                val actionStartedAt = SystemClock.uptimeMillis()
+                if (!replaying) actionsTaken += action
                 val result = tool.execute(action)
+                val actionMillis = SystemClock.uptimeMillis() - actionStartedAt
                 stepCount++
 
                 when (result) {
                     is ToolResult.Success -> {
                         markStep(steps, index, StepStatus.Done)
-                        recordCall()
-                        automation.awaitUiSettled()
-                        val next = observer.observe()
-                        next.snapshot.packageName?.let { appsUsed.add(it) }
-                        recordResult(observationText(next.rendered))
-                        lastObservation = next.rendered
-                        sig?.let { sigToObservation[it] = next.rendered }
+                        val after = observeAfterAction()
+                        recordResult(after.text)
+                        setMetrics(steps, index, metricsFor(after, actionMillis))
 
                         if (action.action == ToolNames.FINISH) {
+                            // Only a model-driven run becomes a routine; replaying an existing
+                            // one is not a new recording.
+                            if (!replaying) lastRecordedActions = actionsTaken.toList()
                             finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.COMPLETED, result.observation)
                             return
                         }
                     }
                     is ToolResult.Failure -> {
                         markStep(steps, index, StepStatus.Failed, result.message)
-                        recordCall()
+                        // A replay step that no longer matches means the screens have moved
+                        // on. Hand the task to the model from here rather than failing.
+                        if (replaying) replaying = false
                         // The screen is included even on failure. Withholding it left the
                         // model nothing to reason about, so it stalled and answered with
                         // prose instead of trying something else.
-                        automation.awaitUiSettled()
-                        val next = observer.observe()
-                        next.snapshot.packageName?.let { appsUsed.add(it) }
-                        recordResult(result.message + "\n\n" + observationText(next.rendered))
-                        lastObservation = next.rendered
-                        sig?.let { sigToObservation[it] = next.rendered }
+                        val after = observeAfterAction()
+                        recordResult(result.message + "\n\n" + after.text)
+                        setMetrics(steps, index, metricsFor(after, actionMillis))
+                        // The rest of the batch was planned against a screen that no longer
+                        // holds, so re-planning beats pushing on.
+                        break
                     }
                     is ToolResult.NeedsConfirmation -> {
                         markStep(steps, index, StepStatus.Done)
-                        recordCall()
                         if (action.action == ToolNames.ASK_USER) {
                             val answer = awaitQuestion(result.prompt)
                             recordResult("The user answered: $answer")
@@ -463,6 +571,7 @@ class AgentRuntime(
                             recordResult("Waiting for the user to confirm.")
                         }
                     }
+                }
                 }
             }
 
@@ -545,6 +654,15 @@ class AgentRuntime(
         _progress.value = _progress.value.copy(steps = steps.toList())
     }
 
+    /** The action as the JSON the model produced, so its call can be replayed verbatim. */
+    private fun encodeAction(action: com.example.agent.domain.model.AgentAction): String =
+        runCatching { AgentJson.encodeToString(AgentAction.serializer(), action) }.getOrDefault("{}")
+
+    private fun setMetrics(steps: MutableList<TaskStep>, index: Int, metrics: StepMetrics) {
+        if (index in steps.indices) steps[index] = steps[index].copy(metrics = metrics)
+        _progress.value = _progress.value.copy(steps = steps.toList())
+    }
+
     private suspend fun finish(
         taskId: String,
         prompt: String,
@@ -571,6 +689,11 @@ class AgentRuntime(
             )
         }
 
+        // Every step already carries its own metrics, so the totals need no plumbing.
+        val inputTokens = steps.sumOf { it.metrics?.inputTokens ?: 0 }
+        val outputTokens = steps.sumOf { it.metrics?.outputTokens ?: 0 }
+        val modelMillis = steps.sumOf { it.metrics?.modelMillis ?: 0 }
+
         history.record(
             TaskRecord(
                 id = taskId,
@@ -582,7 +705,22 @@ class AgentRuntime(
                 stepCount = stepCount,
                 appsUsed = appsUsed.toList(),
                 summary = message,
-                steps = steps.map { RecordedStep(it.label, it.status.name, it.detail) },
+                steps = steps.map {
+                    RecordedStep(
+                        label = it.label,
+                        status = it.status.name,
+                        detail = it.detail,
+                        modelMillis = it.metrics?.modelMillis ?: 0,
+                        settleMillis = it.metrics?.settleMillis ?: 0,
+                        observeMillis = it.metrics?.observeMillis ?: 0,
+                        actionMillis = it.metrics?.actionMillis ?: 0,
+                        inputTokens = it.metrics?.inputTokens ?: 0,
+                        outputTokens = it.metrics?.outputTokens ?: 0,
+                    )
+                },
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+                modelMillis = modelMillis,
             )
         )
     }

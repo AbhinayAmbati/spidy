@@ -6,10 +6,12 @@ import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AgentToolSpec
 import com.example.agent.core.ai.parseObjectOrEmpty
+import com.example.agent.domain.model.AgentActionCall
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
 import com.example.agent.domain.model.MessageRole
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -51,7 +53,7 @@ class GeminiProvider(
                 })
             }
             put("contents", JsonArray(
-                messages.filter { it.role != MessageRole.System }.map { it.toGeminiContent() }
+                messages.filter { it.role != MessageRole.System }.toGeminiContents()
             ))
             if (tools.isNotEmpty()) {
                 put("tools", JsonArray(listOf(buildJsonObject {
@@ -85,25 +87,38 @@ class GeminiProvider(
         val root = runCatching { AgentJson.parseToJsonElement(raw) as? JsonObject }.getOrNull()
             ?: return AgentResponse(message = null, raw = raw)
 
+        val usage = root["usageMetadata"] as? JsonObject
+        val inputTokens = (usage?.get("promptTokenCount") as? JsonPrimitive)?.content?.toIntOrNull()
+        val outputTokens = (usage?.get("candidatesTokenCount") as? JsonPrimitive)?.content?.toIntOrNull()
+
         val candidates = root["candidates"] as? JsonArray
-            ?: return AgentResponse(message = null, raw = raw)
+            ?: return AgentResponse(message = null, raw = raw, inputTokens = inputTokens, outputTokens = outputTokens)
         val contentObj = (candidates.firstOrNull() as? JsonObject)?.get("content") as? JsonObject
         val parts = contentObj?.get("parts") as? JsonArray
             ?: return AgentResponse(message = null, raw = raw)
 
         var text: String? = null
+        val calls = mutableListOf<AgentActionCall>()
         for (part in parts) {
             val obj = part as? JsonObject ?: continue
+            // Gemini can return several functionCall parts in one turn.
             (obj["functionCall"] as? JsonObject)?.let { call ->
                 val name = (call["name"] as? JsonPrimitive)?.content
                 val args = call["args"] as? JsonObject
-                AgentActionCodec.fromToolCall(name, args)?.let {
-                    return AgentResponse(action = it, raw = raw)
-                }
+                AgentActionCodec.fromToolCall(name, args)?.let { calls += AgentActionCall(null, it) }
             }
             (obj["text"] as? JsonPrimitive)?.content?.let { text = it }
         }
-        return AgentResponse(message = text, raw = raw)
+
+        if (calls.isNotEmpty()) {
+            return AgentResponse(
+                calls = calls,
+                raw = raw,
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+            )
+        }
+        return AgentResponse(message = text, raw = raw, inputTokens = inputTokens, outputTokens = outputTokens)
     }
 
 
@@ -137,12 +152,14 @@ internal fun AgentMessage.toGeminiContent(): JsonObject = buildJsonObject {
             put("role", "model")
             val parts = buildList {
                 if (content.isNotBlank()) add(buildJsonObject { put("text", content) })
-                if (name != null) add(buildJsonObject {
-                    put("functionCall", buildJsonObject {
-                        put("name", name)
-                        put("args", parseObjectOrEmpty(toolArguments))
+                toolCalls.forEach { call ->
+                    add(buildJsonObject {
+                        put("functionCall", buildJsonObject {
+                            put("name", call.name)
+                            put("args", parseObjectOrEmpty(call.arguments))
+                        })
                     })
-                })
+                }
             }
             put("parts", JsonArray(
                 if (parts.isEmpty()) listOf(buildJsonObject { put("text", "") }) else parts,
@@ -165,6 +182,39 @@ internal fun AgentMessage.toGeminiContent(): JsonObject = buildJsonObject {
             put("parts", JsonArray(listOf(buildJsonObject { put("text", content) })))
         }
     }
+}
+
+/**
+ * Gemini pairs results with calls by function name inside a *user* turn. Because the loop can
+ * batch several actions per turn, consecutive Tool messages are merged into one turn with
+ * several functionResponse parts.
+ */
+internal fun List<AgentMessage>.toGeminiContents(): List<JsonObject> {
+    val out = mutableListOf<JsonObject>()
+    var i = 0
+    while (i < size) {
+        if (this[i].role == MessageRole.Tool) {
+            val parts = mutableListOf<JsonElement>()
+            while (i < size && this[i].role == MessageRole.Tool) {
+                val result = this[i]
+                parts += buildJsonObject {
+                    put("functionResponse", buildJsonObject {
+                        put("name", result.name ?: "tool")
+                        put("response", buildJsonObject { put("result", result.content) })
+                    })
+                }
+                i++
+            }
+            out += buildJsonObject {
+                put("role", "user")
+                put("parts", JsonArray(parts))
+            }
+        } else {
+            out += this[i].toGeminiContent()
+            i++
+        }
+    }
+    return out
 }
 
 private fun AgentToolSpec.toGeminiFunction(): JsonObject = buildJsonObject {

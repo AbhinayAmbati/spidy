@@ -8,6 +8,7 @@ object Destinations {
     const val PROVIDER = "provider"
     const val ONBOARDING = "onboarding"
     const val MEMORY = "memory"
+    const val ROUTINES = "routines"
     const val TERMS = "terms"
 
     /** Task detail takes the task id as a path argument. */

@@ -49,6 +49,7 @@ fun TaskScreen(
 ) {
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val paused by viewModel.paused.collectAsStateWithLifecycle()
+    val routineSaved by viewModel.routineSaved.collectAsStateWithLifecycle()
     var answerText by remember { mutableStateOf("") }
 
     Column(
@@ -127,6 +128,12 @@ fun TaskScreen(
 
         if (progress.state == TaskState.COMPLETED) {
             Spacer(Modifier.height(SpideySpacing.xl))
+            SecondaryButton(
+                text = if (routineSaved) "Saved as a routine" else "Save as routine",
+                onClick = viewModel::saveRoutine,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(SpideySpacing.md))
             PrimaryButton(
                 text = "Done",
                 onClick = onBack,

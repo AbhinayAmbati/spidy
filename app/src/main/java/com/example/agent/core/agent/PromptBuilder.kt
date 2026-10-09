@@ -17,6 +17,18 @@ object PromptBuilder {
               commentary, or a plan. A reply with no tool call is an error.
             - The only way to finish is to call finish.
 
+            BATCHING - ONE CALL CAN DO SEVERAL THINGS
+            - You may return SEVERAL tool calls in one turn when you are confident about the
+              whole sequence - for example opening an app and then tapping an element you
+              already know is there. Each call is a separate tool call in the same reply.
+            - Keep a batch small, two or three actions, and only include steps you are sure
+              about. Every action is still checked and run in order.
+            - Do NOT batch a step whose target depends on what the previous step shows. If you
+              need to see the screen to decide, act once and wait for the observation.
+            - If any action in a batch fails, the rest are abandoned and you are asked again,
+              so a batch never pushes on with a plan reality has already contradicted.
+            - finish must be called on its own, never inside a batch.
+
             THE LOOP - follow this every turn
             1. READ the observation: which app is on screen, and whether it says the screen
                changed since your last action.

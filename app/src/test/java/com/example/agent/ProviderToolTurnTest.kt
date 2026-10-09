@@ -2,10 +2,13 @@ package com.example.agent
 
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.provider.toAnthropicMessage
+import com.example.agent.core.ai.provider.toGeminiContents
+import com.example.agent.core.ai.provider.toAnthropicMessages
 import com.example.agent.core.ai.provider.toGeminiContent
 import com.example.agent.core.ai.provider.toOpenAiMessage
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.MessageRole
+import com.example.agent.domain.model.ToolCall
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -24,9 +27,9 @@ class ProviderToolTurnTest {
     private val call = AgentMessage(
         role = MessageRole.Assistant,
         content = "",
-        toolCallId = "call_3",
-        name = "click",
-        toolArguments = """{"target":{"text":"Search"}}""",
+        toolCalls = listOf(
+            ToolCall(id = "call_3", name = "click", arguments = """{"target":{"text":"Search"}}"""),
+        ),
     )
 
     private val result = AgentMessage(
@@ -121,6 +124,80 @@ class ProviderToolTurnTest {
         assertThat((fr["response"] as JsonObject)["result"]).isNotNull()
     }
 
+    // ------------------------------------------------------------------ batching
+
+    private val batch = AgentMessage(
+        role = MessageRole.Assistant,
+        content = "",
+        toolCalls = listOf(
+            ToolCall("call_1", "open_app", """{"packageName":"com.google.android.youtube"}"""),
+            ToolCall("call_2", "click", """{"target":{"text":"Search"}}"""),
+        ),
+    )
+
+    @Test
+    fun `openai carries every call of a batch`() {
+        val tc = arr(batch.toOpenAiMessage(), "tool_calls")!!
+
+        assertThat(tc).hasSize(2)
+        assertThat(str(tc[0] as JsonObject, "id")).isEqualTo("call_1")
+        assertThat(str(((tc[0] as JsonObject)["function"] as JsonObject), "name")).isEqualTo("open_app")
+        assertThat(str(tc[1] as JsonObject, "id")).isEqualTo("call_2")
+    }
+
+    @Test
+    fun `anthropic carries every call of a batch`() {
+        val blocks = arr(batch.toAnthropicMessage(), "content")!!
+
+        assertThat(blocks).hasSize(2)
+        assertThat(str(blocks[0] as JsonObject, "type")).isEqualTo("tool_use")
+        assertThat(str(blocks[0] as JsonObject, "name")).isEqualTo("open_app")
+        assertThat(str(blocks[1] as JsonObject, "name")).isEqualTo("click")
+    }
+
+    @Test
+    fun `gemini carries every call of a batch`() {
+        val parts = arr(batch.toGeminiContent(), "parts")!!
+
+        assertThat(parts).hasSize(2)
+        assertThat(((parts[0] as JsonObject)["functionCall"] as JsonObject)["name"]).isNotNull()
+        assertThat(((parts[1] as JsonObject)["functionCall"] as JsonObject)["name"]).isNotNull()
+    }
+
+    @Test
+    fun `anthropic merges a batch's results into ONE user turn`() {
+        // Anthropic expects every tool_result for an assistant turn inside a single user
+        // message; separate user turns risk a same-role sequence it rejects.
+        val results = listOf(
+            AgentMessage(MessageRole.Tool, "opened", toolCallId = "call_1", name = "open_app"),
+            AgentMessage(MessageRole.Tool, "tapped", toolCallId = "call_2", name = "click"),
+        )
+
+        val messages = (listOf(batch) + results).toAnthropicMessages()
+
+        assertThat(messages).hasSize(2) // the assistant turn, then one merged user turn
+        val blocks = arr(messages[1], "content")!!
+        assertThat(blocks).hasSize(2)
+        assertThat(str(blocks[0] as JsonObject, "tool_use_id")).isEqualTo("call_1")
+        assertThat(str(blocks[1] as JsonObject, "tool_use_id")).isEqualTo("call_2")
+    }
+
+    @Test
+    fun `gemini merges a batch's results into ONE user turn`() {
+        val results = listOf(
+            AgentMessage(MessageRole.Tool, "opened", toolCallId = "call_1", name = "open_app"),
+            AgentMessage(MessageRole.Tool, "tapped", toolCallId = "call_2", name = "click"),
+        )
+
+        val contents = (listOf(batch) + results).toGeminiContents()
+
+        assertThat(contents).hasSize(2)
+        val parts = arr(contents[1], "parts")!!
+        assertThat(parts).hasSize(2)
+        assertThat(str((parts[0] as JsonObject)["functionResponse"] as JsonObject, "name"))
+            .isEqualTo("open_app")
+    }
+
     // ------------------------------------------------------------------ forcing
 
     @Test
@@ -128,9 +205,7 @@ class ProviderToolTurnTest {
         val o = AgentMessage(
             role = MessageRole.Assistant,
             content = "",
-            toolCallId = "call_1",
-            name = "press_back",
-            toolArguments = null,
+            toolCalls = listOf(ToolCall(id = "call_1", name = "press_back", arguments = "{}")),
         ).toAnthropicMessage()
 
         val block = arr(o, "content")!!.first() as JsonObject

@@ -29,6 +29,7 @@ import com.example.agent.ui.history.HistoryScreen
 import com.example.agent.ui.history.TaskDetailScreen
 import com.example.agent.ui.home.HomeScreen
 import com.example.agent.ui.onboarding.OnboardingScreen
+import com.example.agent.ui.routines.RoutinesScreen
 import com.example.agent.ui.settings.MemoryScreen
 import com.example.agent.ui.settings.ProviderScreen
 import com.example.agent.ui.settings.SettingsScreen
@@ -119,6 +120,7 @@ fun SpideyApp(startDestination: String = Destinations.SPLASH) {
                     onOpenProvider = { navController.navigate(Destinations.PROVIDER) },
                     onOpenOnboarding = { navController.navigate(Destinations.ONBOARDING) },
                     onOpenMemory = { navController.navigate(Destinations.MEMORY) },
+                    onOpenRoutines = { navController.navigate(Destinations.ROUTINES) },
                     onOpenTerms = { navController.navigate(Destinations.TERMS) },
                 )
             }
@@ -132,6 +134,9 @@ fun SpideyApp(startDestination: String = Destinations.SPLASH) {
             }
             composable(Destinations.MEMORY) {
                 MemoryScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Destinations.ROUTINES) {
+                RoutinesScreen(onBack = { navController.popBackStack() })
             }
             composable(Destinations.TERMS) {
                 TermsScreen(onBack = { navController.popBackStack() })

@@ -3,6 +3,10 @@
   typeTouchInteractionStart is what powers touch-to-stop: the user touching the screen
   halts the agent. It is the one high-frequency event we genuinely consume.
 
+  notificationTimeout is the platform's throttle on event delivery. It was 300ms, which put
+  a floor under how quickly we could notice the screen had settled; 100ms makes settling
+  responsive without meaningfully raising the event rate.
+
   The rest are kept deliberately narrow. typeViewTextChanged / typeViewScrolled /
   typeViewFocused / typeViewClicked fire constantly, are not filtered by package, and
   nothing in the app consumes them — so they only added load and risked the service
@@ -15,5 +19,5 @@
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
-    android:notificationTimeout="300"
+    android:notificationTimeout="100"
     android:settingsActivity="com.example.agent.MainActivity" />
