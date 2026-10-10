@@ -471,6 +471,16 @@ class AgentRuntime(
                      * model already has, so both the traversal and the listing are skipped — the
                      * single biggest per-step saving, and it applies to every no-op action.
                      */
+                    /**
+                     * Tools that cannot change the screen, so there is nothing to wait for.
+                     *
+                     * A real 21-second run spent 8.8 s in settle - 41% of the wall clock, more
+                     * than the model - and the read-only steps paid the full quiet period for a
+                     * screen they had just read. The tool already returns the observation, so
+                     * settling and re-reading it is pure cost.
+                     */
+                    val nonMutating = action.action in NON_MUTATING_TOOLS
+
                     suspend fun observeAfterAction(): AfterAction {
                         val settleStartedAt = SystemClock.uptimeMillis()
                         val changed = automation.awaitUiSettled()
@@ -622,9 +632,19 @@ class AgentRuntime(
                 when (result) {
                     is ToolResult.Success -> {
                         markStep(steps, index, StepStatus.Done)
-                        val after = observeAfterAction()
-                        recordResult(after.text)
-                        setMetrics(steps, index, metricsFor(after, actionMillis))
+                        if (nonMutating) {
+                            // The tool's own result already carries the screen, and nothing it
+                            // did can have changed it.
+                            recordResult(result.observation)
+                            setMetrics(
+                                steps, index,
+                                metricsFor(AfterAction("", 0, 0), actionMillis),
+                            )
+                        } else {
+                            val after = observeAfterAction()
+                            recordResult(after.text)
+                            setMetrics(steps, index, metricsFor(after, actionMillis))
+                        }
 
                         if (action.action == ToolNames.FINISH) {
                             // Only a model-driven run becomes a routine; replaying an existing
@@ -896,6 +916,18 @@ class AgentRuntime(
          * Two is enough for anything real: a third identical call has never been the thing
          * that unblocked a task, and the screenshots that prompted this show five and six.
          */
+        /**
+         * Tools that cannot change the screen.
+         *
+         * Waiting for these to "settle" is waiting for something that cannot happen, and then
+         * re-reading the screen they have just read.
+         */
+        private val NON_MUTATING_TOOLS = setOf(
+            ToolNames.READ_SCREEN,
+            ToolNames.FIND_TEXT,
+            ToolNames.GET_NOTIFICATIONS,
+        )
+
         const val MAX_IDENTICAL_RUNS = 2
 
         /**

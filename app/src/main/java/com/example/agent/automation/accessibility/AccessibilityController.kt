@@ -159,10 +159,30 @@ class AccessibilityController {
         val args = android.os.Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
+
+        if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+            return@withContext ActionResult.Ok
+        }
+
+        // SET_TEXT is refused outright by a field that does not hold focus - the search boxes in
+        // several apps do exactly this, which is why a real run failed to type on its first
+        // attempt and succeeded on the second. Focus it, then fill it.
+        focusAndMaybeClick(node)
+        delay(120)
         if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
             ActionResult.Ok
         } else {
             ActionResult.Unsupported
+        }
+    }
+
+    /** Puts focus on a field, clicking it first when the platform needs that to focus it. */
+    private fun focusAndMaybeClick(node: AccessibilityNodeInfo) {
+        if (!node.isFocused) {
+            node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        }
+        if (!node.isFocused) {
+            clickableSelfOrAncestor(node)?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         }
     }
 

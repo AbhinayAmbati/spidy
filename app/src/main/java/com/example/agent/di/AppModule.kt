@@ -62,7 +62,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AgentDatabase =
         Room.databaseBuilder(context, AgentDatabase::class.java, "spidey.db")
-            .addMigrations(AgentDatabase.MIGRATION_1_2)
+            .addMigrations(AgentDatabase.MIGRATION_1_2, AgentDatabase.MIGRATION_2_3)
             .build()
 
     @Provides

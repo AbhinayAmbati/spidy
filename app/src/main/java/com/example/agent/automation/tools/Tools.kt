@@ -27,11 +27,30 @@ class OpenAppTool(private val automation: AndroidAutomationManager) : BaseTool()
     override val parametersSchema = ToolSchemas.OPEN_APP
 
     override fun validate(action: AgentAction): ValidationResult =
-        if (action.packageName.isNullOrBlank()) ValidationResult.Invalid("packageName is required")
-        else ValidationResult.Valid
+        if (appQuery(action) == null) {
+            ValidationResult.Invalid(
+                "I need the app: put its package name (com.google.android.youtube) or just its " +
+                    "name (YouTube) in packageName.",
+            )
+        } else {
+            ValidationResult.Valid
+        }
+
+    /**
+     * The package name, or whatever else the model used to name the app.
+     *
+     * The schema asks for a package name, but a model that only knows the app is called
+     * "YouTube" reasonably puts that in `packageName` - or in `text`, or in the target. All
+     * three are accepted, because refusing them was failing the very first step of a task and
+     * `resolvePackage` already knows how to turn a name into a package.
+     */
+    private fun appQuery(action: AgentAction): String? =
+        listOf(action.packageName, action.text, action.target?.text)
+            .firstOrNull { !it.isNullOrBlank() }
+            ?.trim()
 
     override suspend fun execute(action: AgentAction): ToolResult {
-        val query = action.packageName!!.trim()
+        val query = appQuery(action) ?: return ToolResult.Failure("No app was named.")
         val pkg = automation.resolvePackage(query)
             ?: return ToolResult.Failure("No installed app matches \"$query\".")
 

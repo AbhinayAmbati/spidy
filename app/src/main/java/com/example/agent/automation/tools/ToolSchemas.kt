@@ -13,7 +13,7 @@ object ToolSchemas {
          }}
     """
 
-    val OPEN_APP = """{"type":"object","properties":{"packageName":{"type":"string","description":"Android package name, e.g. com.android.chrome"}},"required":["packageName"]}"""
+    val OPEN_APP = """{"type":"object","properties":{"packageName":{"type":"string","description":"The app to open - its package name (com.google.android.youtube) or just its name (YouTube)"}},"required":["packageName"]}"""
     val CLOSE_APP = """{"type":"object","properties":{"packageName":{"type":"string"}},"required":["packageName"]}"""
     val READ_SCREEN = """{"type":"object","properties":{}}"""
     val FIND_TEXT = """{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}"""

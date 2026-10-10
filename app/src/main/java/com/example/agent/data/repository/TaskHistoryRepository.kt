@@ -14,8 +14,6 @@ import kotlinx.serialization.json.Json
 /** Local-only task history. Nothing here ever leaves the device. */
 class TaskHistoryRepository(private val dao: TaskDao) {
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     fun observeRecent(limit: Int = 20): Flow<List<TaskRecord>> =
         dao.observeRecent(limit).map { list -> list.map { it.toDomain() } }
 
@@ -26,36 +24,48 @@ class TaskHistoryRepository(private val dao: TaskDao) {
     suspend fun clear() = dao.clear()
 
     suspend fun delete(id: String) = dao.deleteById(id)
-
-    private fun TaskEntity.toDomain() = TaskRecord(
-        id = id,
-        prompt = prompt,
-        state = runCatching { TaskState.valueOf(state) }.getOrDefault(TaskState.COMPLETED),
-        createdAtMillis = createdAtMillis,
-        finishedAtMillis = finishedAtMillis,
-        durationMs = durationMs,
-        stepCount = stepCount,
-        appsUsed = appsUsed.split(",").filter { it.isNotBlank() },
-        summary = summary,
-        steps = decodeSteps(steps),
-    )
-
-    private fun TaskRecord.toEntity() = TaskEntity(
-        id = id,
-        prompt = prompt,
-        state = state.name,
-        createdAtMillis = createdAtMillis,
-        finishedAtMillis = finishedAtMillis,
-        durationMs = durationMs,
-        stepCount = stepCount,
-        appsUsed = appsUsed.joinToString(","),
-        summary = summary,
-        steps = encodeSteps(steps),
-    )
-
-    private fun encodeSteps(steps: List<RecordedStep>): String =
-        runCatching { json.encodeToString(steps) }.getOrDefault("[]")
-
-    private fun decodeSteps(raw: String): List<RecordedStep> =
-        runCatching { json.decodeFromString<List<RecordedStep>>(raw) }.getOrDefault(emptyList())
 }
+
+// The mappers live at the top level rather than as members so they can be exercised without a
+// database. They are the pair that broke - a field on one side with nowhere to live on the
+// other - and a test that needs Room to check them is a test that never gets written.
+
+private val historyJson = Json { ignoreUnknownKeys = true }
+
+internal fun TaskEntity.toDomain() = TaskRecord(
+    id = id,
+    prompt = prompt,
+    state = runCatching { TaskState.valueOf(state) }.getOrDefault(TaskState.COMPLETED),
+    createdAtMillis = createdAtMillis,
+    finishedAtMillis = finishedAtMillis,
+    durationMs = durationMs,
+    stepCount = stepCount,
+    appsUsed = appsUsed.split(",").filter { it.isNotBlank() },
+    summary = summary,
+    steps = decodeSteps(steps),
+    inputTokens = inputTokens,
+    outputTokens = outputTokens,
+    modelMillis = modelMillis,
+)
+
+internal fun TaskRecord.toEntity() = TaskEntity(
+    id = id,
+    prompt = prompt,
+    state = state.name,
+    createdAtMillis = createdAtMillis,
+    finishedAtMillis = finishedAtMillis,
+    durationMs = durationMs,
+    stepCount = stepCount,
+    appsUsed = appsUsed.joinToString(","),
+    summary = summary,
+    steps = encodeSteps(steps),
+    inputTokens = inputTokens,
+    outputTokens = outputTokens,
+    modelMillis = modelMillis,
+)
+
+private fun encodeSteps(steps: List<RecordedStep>): String =
+    runCatching { historyJson.encodeToString(steps) }.getOrDefault("[]")
+
+private fun decodeSteps(raw: String): List<RecordedStep> =
+    runCatching { historyJson.decodeFromString<List<RecordedStep>>(raw) }.getOrDefault(emptyList())

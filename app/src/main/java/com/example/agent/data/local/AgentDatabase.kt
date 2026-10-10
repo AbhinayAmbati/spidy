@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [TaskEntity::class], version = 2, exportSchema = false)
+@Database(entities = [TaskEntity::class], version = 3, exportSchema = false)
 abstract class AgentDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
 
@@ -17,6 +17,19 @@ abstract class AgentDatabase : RoomDatabase() {
         val MIGRATION_1_2: Migration = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tasks ADD COLUMN steps TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /**
+         * v2 -> v3 adds the task totals. They existed on the domain model but were never
+         * given columns, so the diagnostics always read back zero. Existing rows get zero,
+         * which is honest - the totals were not recorded for them.
+         */
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN inputTokens INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE tasks ADD COLUMN outputTokens INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE tasks ADD COLUMN modelMillis INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

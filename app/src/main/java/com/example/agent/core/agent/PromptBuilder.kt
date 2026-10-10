@@ -38,6 +38,14 @@ object PromptBuilder {
             4. VERIFY on the next observation. If the screen did not change, the action did
                not work - do NOT repeat it. Take a different route.
 
+            SUBMITTING A SEARCH
+            - After typing into a search box, SUBMIT the search: tap the magnifier or the
+              "Search" action, or press the keyboard's search key. Do not tap an autocomplete
+              suggestion in the dropdown below the box - those only refill the box, so the
+              screen never changes and you will loop.
+            - If a suggestion is exactly what you want, tapping it usually does submit. If the
+              screen does not change afterwards, it did not - submit instead of tapping another.
+
             DO NOT SEARCH TWICE
             - Once a search has returned results, do NOT search again. The same query returns
               the same page, and a reworded one returns almost the same page. If results are on
