@@ -5,8 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.agent.automation.AgentForegroundService
 import com.example.agent.core.agent.AgentRuntime
+import com.example.agent.core.permissions.AccessibilityWatch
 import com.example.agent.core.permissions.PermissionStatus
-import com.example.agent.core.permissions.PermissionUtils
 import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.TaskProgress
 import com.example.agent.domain.model.TaskRecord
@@ -36,12 +36,14 @@ class HomeViewModel @Inject constructor(
     val recentTasks: StateFlow<List<TaskRecord>> = history.observeRecent(3)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _permissions = MutableStateFlow(PermissionUtils.status(context))
-    val permissions: StateFlow<PermissionStatus> = _permissions
+    private val accessibility = AccessibilityWatch(context, viewModelScope)
 
-    fun refreshPermissions() {
-        _permissions.value = PermissionUtils.status(context)
-    }
+    val permissions: StateFlow<PermissionStatus> = accessibility.status
+
+    /** True only when accessibility has stayed disconnected long enough to be a real fault. */
+    val accessibilityStuck: StateFlow<Boolean> = accessibility.stuck
+
+    fun refreshPermissions() = accessibility.refresh()
 
     fun submit(prompt: String) {
         val trimmed = prompt.trim()

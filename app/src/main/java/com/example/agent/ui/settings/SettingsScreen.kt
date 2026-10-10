@@ -55,6 +55,7 @@ fun SettingsScreen(
     val memory by viewModel.memoryEnabled.collectAsStateWithLifecycle()
     val touchToStop by viewModel.touchToStop.collectAsStateWithLifecycle()
     val overlayAllowed by viewModel.overlayAllowed.collectAsStateWithLifecycle()
+    val accessibilityStuck by viewModel.accessibilityStuck.collectAsStateWithLifecycle()
 
     // Overlay permission, accessibility and notification access are all granted on *system*
     // screens, so the state has to be re-read on the way back or a card would still say
@@ -108,9 +109,9 @@ fun SettingsScreen(
             title = "Accessibility",
             body = "Required so the agent can see and control the screen. You can stop it any time.",
             granted = permissions.accessibilityReady,
-            warning = if (permissions.accessibilityStuck) {
-                "Accessibility is switched on but the service is not connected. Turn it off " +
-                    "and on again in system settings."
+            warning = if (accessibilityStuck) {
+                "Accessibility is switched on but the service has not connected, even " +
+                    "after waiting. Turn it off and on again in system settings."
             } else {
                 null
             },

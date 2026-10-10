@@ -48,6 +48,7 @@ fun HomeScreen(
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val recent by viewModel.recentTasks.collectAsStateWithLifecycle()
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
+    val accessibilityStuck by viewModel.accessibilityStuck.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshPermissions() }
@@ -95,9 +96,9 @@ fun HomeScreen(
                 title = "Accessibility access",
                 body = "Spidey needs accessibility to see and control the screen. You can stop it any time.",
                 granted = false,
-                warning = if (permissions.accessibilityStuck) {
-                    "Accessibility is switched on but the service is not connected. Turn it off " +
-                        "and on again in system settings."
+                warning = if (accessibilityStuck) {
+                    "Accessibility is switched on but the service has not connected, even " +
+                        "after waiting. Turn it off and on again in system settings."
                 } else {
                     null
                 },

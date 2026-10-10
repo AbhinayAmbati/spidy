@@ -13,8 +13,11 @@ data class PermissionStatus(
     val notificationListenerEnabled: Boolean,
     val notificationsGranted: Boolean,
 ) {
-    /** Enabled in settings but not bound — usually needs a toggle off and on again. */
-    val accessibilityStuck: Boolean get() = accessibilityEnabled && !accessibilityConnected
+    // There is deliberately no `accessibilityStuck` here any more. "Enabled but not
+    // connected" is the NORMAL state for the first seconds of every launch, because the
+    // service dies with our process while the system setting survives. Whether it is a fault
+    // depends on how long it lasts, which is not something a snapshot can answer - see
+    // AccessibilityConnection.
 
     /** True only when the agent can really see the screen. */
     val accessibilityReady: Boolean get() = accessibilityEnabled && accessibilityConnected

@@ -3,6 +3,7 @@ package com.example.agent.ui.settings
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.agent.core.permissions.AccessibilityWatch
 import com.example.agent.core.permissions.PermissionStatus
 import com.example.agent.core.permissions.PermissionUtils
 import com.example.agent.data.preferences.SettingsRepository
@@ -41,8 +42,12 @@ class SettingsViewModel @Inject constructor(
     val touchToStop: StateFlow<Boolean> = settings.touchToStop
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
-    private val _permissions = MutableStateFlow(PermissionUtils.status(context))
-    val permissions: StateFlow<PermissionStatus> = _permissions
+    private val accessibility = AccessibilityWatch(context, viewModelScope)
+
+    val permissions: StateFlow<PermissionStatus> = accessibility.status
+
+    /** True only when accessibility has stayed disconnected long enough to be a real fault. */
+    val accessibilityStuck: StateFlow<Boolean> = accessibility.stuck
 
     /**
      * Whether the status overlay is allowed to draw over other apps.
@@ -64,9 +69,7 @@ class SettingsViewModel @Inject constructor(
         runCatching { context.startActivity(intent) }
     }
 
-    fun refreshPermissions() {
-        _permissions.value = PermissionUtils.status(context)
-    }
+    fun refreshPermissions() = accessibility.refresh()
 
     fun setAppearance(mode: AppearanceMode) = viewModelScope.launch { settings.setAppearance(mode) }
 
