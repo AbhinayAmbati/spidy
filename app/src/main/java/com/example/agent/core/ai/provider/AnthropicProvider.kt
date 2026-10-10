@@ -2,6 +2,7 @@ package com.example.agent.core.ai.provider
 
 import com.example.agent.core.ai.AIProvider
 import com.example.agent.core.ai.AgentActionCodec
+import com.example.agent.core.ai.DecodedCall
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AgentToolSpec
@@ -92,6 +93,7 @@ class AnthropicProvider(
 
         var text: String? = null
         val calls = mutableListOf<AgentActionCall>()
+        val malformed = mutableListOf<String>()
         for (block in blocks) {
             val obj = block as? JsonObject ?: continue
             when ((obj["type"] as? JsonPrimitive)?.content) {
@@ -100,15 +102,19 @@ class AnthropicProvider(
                 "tool_use" -> {
                     val id = (obj["id"] as? JsonPrimitive)?.content
                     val name = (obj["name"] as? JsonPrimitive)?.content
-                    AgentActionCodec.fromToolCall(name, obj["input"] as? JsonObject)
-                        ?.let { calls += AgentActionCall(id, it) }
+                    when (val decoded = AgentActionCodec.decode(name, obj["input"] as? JsonObject)) {
+                        null -> Unit
+                        is DecodedCall.Ok -> calls += AgentActionCall(id, decoded.action)
+                        is DecodedCall.Malformed -> malformed += decoded.detail
+                    }
                 }
             }
         }
 
-        if (calls.isNotEmpty()) {
+        if (calls.isNotEmpty() || malformed.isNotEmpty()) {
             return AgentResponse(
                 calls = calls,
+                malformed = malformed,
                 raw = raw,
                 inputTokens = inputTokens,
                 outputTokens = outputTokens,

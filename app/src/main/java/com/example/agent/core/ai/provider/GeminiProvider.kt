@@ -2,6 +2,7 @@ package com.example.agent.core.ai.provider
 
 import com.example.agent.core.ai.AIProvider
 import com.example.agent.core.ai.AgentActionCodec
+import com.example.agent.core.ai.DecodedCall
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AgentToolSpec
@@ -99,20 +100,26 @@ class GeminiProvider(
 
         var text: String? = null
         val calls = mutableListOf<AgentActionCall>()
+        val malformed = mutableListOf<String>()
         for (part in parts) {
             val obj = part as? JsonObject ?: continue
             // Gemini can return several functionCall parts in one turn.
             (obj["functionCall"] as? JsonObject)?.let { call ->
                 val name = (call["name"] as? JsonPrimitive)?.content
                 val args = call["args"] as? JsonObject
-                AgentActionCodec.fromToolCall(name, args)?.let { calls += AgentActionCall(null, it) }
+                when (val decoded = AgentActionCodec.decode(name, args)) {
+                    null -> Unit
+                    is DecodedCall.Ok -> calls += AgentActionCall(null, decoded.action)
+                    is DecodedCall.Malformed -> malformed += decoded.detail
+                }
             }
             (obj["text"] as? JsonPrimitive)?.content?.let { text = it }
         }
 
-        if (calls.isNotEmpty()) {
+        if (calls.isNotEmpty() || malformed.isNotEmpty()) {
             return AgentResponse(
                 calls = calls,
+                malformed = malformed,
                 raw = raw,
                 inputTokens = inputTokens,
                 outputTokens = outputTokens,

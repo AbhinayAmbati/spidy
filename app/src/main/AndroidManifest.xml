@@ -10,6 +10,13 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <!--
+      Shows a small status pill over other apps while a task runs. This is the only way the
+      user can tell what the agent is doing once the app is in the background, since the agent
+      works inside other apps. Optional: without it the overlay simply does not appear.
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!--
       We deliberately do NOT request QUERY_ALL_PACKAGES (restricted by Play policy).
       Instead we declare visibility of launchable apps via an intent query, which is
       sufficient to resolve and launch user apps by package name.

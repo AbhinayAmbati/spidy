@@ -43,6 +43,11 @@ data class AgentResponse(
      * round trip.
      */
     val calls: List<AgentActionCall> = emptyList(),
+    /**
+     * Calls the model made that could not be read, with what was wrong. Kept separate from
+     * [calls] so a fumbled call can be shown back to the model instead of ending the task.
+     */
+    val malformed: List<String> = emptyList(),
     val message: String? = null,
     val raw: String? = null,
     /** Reported by the provider when it includes usage; null when it does not. */
@@ -51,5 +56,5 @@ data class AgentResponse(
 ) {
     /** The first proposed action, for callers that only handle one. */
     val action: AgentAction? get() = calls.firstOrNull()?.action
-    val isFinal: Boolean get() = calls.isEmpty()
+    val isFinal: Boolean get() = calls.isEmpty() && malformed.isEmpty()
 }

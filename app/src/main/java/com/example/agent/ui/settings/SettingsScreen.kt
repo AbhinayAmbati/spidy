@@ -51,6 +51,11 @@ fun SettingsScreen(
     val provider by viewModel.providerConfig.collectAsStateWithLifecycle()
     val memory by viewModel.memoryEnabled.collectAsStateWithLifecycle()
     val touchToStop by viewModel.touchToStop.collectAsStateWithLifecycle()
+    val overlayAllowed by viewModel.overlayAllowed.collectAsStateWithLifecycle()
+
+    // The permission is granted on a system screen, so the state has to be re-read on the way
+    // back or the row would still say "Grant" after the user had already granted it.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshOverlayPermission() }
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
 
     // Accessibility and notification access are granted in *system* settings, so
@@ -139,6 +144,33 @@ fun SettingsScreen(
                     )
                 }
                 Switch(checked = touchToStop, onCheckedChange = viewModel::setTouchToStop)
+            }
+        }
+
+        Spacer(Modifier.height(SpideySpacing.md))
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Show status over other apps",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Text(
+                        text = if (overlayAllowed) {
+                            "A small pill shows what the agent is doing while you are in " +
+                                "another app."
+                        } else {
+                            "Needs \"Display over other apps\". Without it you cannot see the " +
+                                "agent's status once it leaves this app."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.spideyColors.textSecondary,
+                    )
+                }
+                if (!overlayAllowed) {
+                    SecondaryButton(text = "Grant", onClick = viewModel::openOverlaySettings)
+                }
             }
         }
 

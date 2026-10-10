@@ -240,6 +240,8 @@ class AgentRuntime(
         var replaying = routine != null
 
         var nudges = 0
+        // How many times each exact action has run this task. See NEVER_REPEATED_TOOLS.
+        val signatureRuns = mutableMapOf<String, Int>()
         // Loop protection. The most common failure is running the same action over and
         // over — opening an app already on screen, or retyping text that is already there.
         // The prompt forbids it, but that cannot be relied on.
@@ -345,16 +347,52 @@ class AgentRuntime(
                     val said = response?.message?.takeIf { it.isNotBlank() }
                     if (said != null) messages += AgentMessage(MessageRole.Assistant, said)
 
+                    // A call that could not be read is shown back to the model rather than
+                    // ending the task. This used to throw out of parsing and kill the whole
+                    // run on step 0, before the phone had done anything at all - but a model
+                    // that fumbles one call is usually fine on the next one.
+                    val malformed = response?.malformed.orEmpty()
+                    if (malformed.isNotEmpty() && nudges < MAX_TEXT_NUDGES) {
+                        nudges++
+                        messages += AgentMessage(
+                            MessageRole.User,
+                            PromptBuilder.observationMessage(
+                                "Your last tool call could not be read:\n" +
+                                    malformed.joinToString("\n") +
+                                    "\nSend that call again, with the arguments exactly as the " +
+                                    "tool's schema describes them. In particular a target is an " +
+                                    "object, not a string: {\"target\":{\"text\":\"the visible " +
+                                    "label\"}}.",
+                            ),
+                        )
+                        trim(messages)
+                        continue
+                    }
+
                     // A reply with no tool call is NOT a finished task: completion always
                     // arrives through the `finish` tool. Reporting the model's prose as a
                     // successful result was quietly wrong, so nudge it back on track first.
                     if (nudges < MAX_TEXT_NUDGES) {
                         nudges++
+                        // The screen goes with the nudge. Without it the model was told off
+                        // for talking but given nothing to act on, so it talked again - which
+                        // is exactly how the nudge loop used to exhaust itself.
+                        val screen = lastObservation?.takeIf { it.isNotBlank() }
                         messages += AgentMessage(
                             MessageRole.User,
                             PromptBuilder.observationMessage(
-                                "You replied with text instead of calling a tool. Call exactly " +
-                                    "one tool now — use finish when the task is complete.",
+                                buildString {
+                                    appendLine(
+                                        "You replied with text instead of calling a tool. " +
+                                            "Reply again, and this time call a tool.",
+                                    )
+                                    appendLine("Use finish when the task is complete.")
+                                    if (screen != null) {
+                                        appendLine()
+                                        appendLine("The screen right now:")
+                                        append(screen)
+                                    }
+                                },
                             ),
                         )
                         trim(messages)
@@ -465,6 +503,27 @@ class AgentRuntime(
                         inputTokens = response?.inputTokens ?: 0,
                         outputTokens = response?.outputTokens ?: 0,
                     )
+
+                    // ---- identical-repeat guard ---------------------------------------
+                    // An action that has already run with exactly these arguments and got
+                    // nowhere must not run again. This is checked by signature rather than by
+                    // whether the screen changed, because the screen almost always *does*
+                    // change - and two runs that accomplished the same nothing still look
+                    // different to a snapshot.
+                    if (sig != null && action.action in ActionSignature.NEVER_REPEATED_TOOLS) {
+                        val runs = (signatureRuns[sig] ?: 0) + 1
+                        signatureRuns[sig] = runs
+                        if (runs > MAX_IDENTICAL_RUNS) {
+                            markStep(steps, index, StepStatus.Failed, "Already done — nothing gained")
+                            recordResult(
+                                "\"${action.action}\" with exactly these arguments has already " +
+                                    "run and got you nowhere. Running it again will not help. " +
+                                    "Read the screen and pick a different element, or call " +
+                                    "finish if the task is already done.",
+                            )
+                            break
+                        }
+                    }
 
                     // ---- repeat guard -------------------------------------------------
                     // Refuse to re-run an action whose arguments are identical to one that
@@ -790,10 +849,26 @@ class AgentRuntime(
         const val STOPPED_BY_TOUCH = "Stopped: you touched the screen."
 
         /** How many times we push the model back towards calling a tool before giving up. */
-        const val MAX_TEXT_NUDGES = 2
+        /**
+         * How many times the model is asked again after replying with prose instead of a call.
+         *
+         * Two was too few. A model that is momentarily chatty - often right after a failure it
+         * could not resolve - would spend both nudges and end the task, which is what two of
+         * the reported screenshots show. Four costs at most two extra calls and lets it
+         * recover.
+         */
+        const val MAX_TEXT_NUDGES = 4
 
         /** How many times we refuse a repeat before ending the task instead of looping. */
         const val MAX_REPEAT_REFUSALS = 3
+
+        /**
+         * How many times one exact action may run in a single task before it is refused.
+         *
+         * Two is enough for anything real: a third identical call has never been the thing
+         * that unblocked a task, and the screenshots that prompted this show five and six.
+         */
+        const val MAX_IDENTICAL_RUNS = 2
 
         /** Consecutive steps with an unchanged screen before we stop for lack of progress. */
         const val MAX_STALLED_STEPS = 4

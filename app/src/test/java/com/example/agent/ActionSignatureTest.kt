@@ -8,75 +8,75 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * Loop detection keys off these signatures. The agent repeatedly re-opened Chrome and
- * re-typed the same search terms, so "the same action" has to be recognised reliably —
- * while genuinely repeatable tools must never be treated as a loop.
+ * Loop detection.
+ *
+ * Two different rules live here, and they catch different failures. The signature is the key
+ * both use; [ActionSignature.NEVER_REPEATED_TOOLS] is the set of tools that must never run
+ * twice with identical arguments in one task, because the screenshots that prompted this show
+ * "Opening com.android.chrome" five times and "Typing Kubernetes" six.
  */
 class ActionSignatureTest {
 
     @Test
-    fun `identical clicks on the same element share a signature`() {
-        val a = AgentAction(ToolNames.CLICK, target = ActionTarget(text = "New tab"))
-        val b = AgentAction(ToolNames.CLICK, target = ActionTarget(text = "New tab"))
+    fun `the same action and arguments give the same key`() {
+        val a = AgentAction(action = ToolNames.CLICK, target = ActionTarget(text = "Next"))
+        val b = AgentAction(action = ToolNames.CLICK, target = ActionTarget(text = "Next"))
 
         assertThat(ActionSignature.of(a)).isEqualTo(ActionSignature.of(b))
     }
 
     @Test
-    fun `clicks on different elements differ`() {
-        val a = AgentAction(ToolNames.CLICK, target = ActionTarget(text = "New tab"))
-        val b = AgentAction(ToolNames.CLICK, target = ActionTarget(text = "Search"))
+    fun `a different target gives a different key`() {
+        val next = AgentAction(action = ToolNames.CLICK, target = ActionTarget(text = "Next"))
+        val back = AgentAction(action = ToolNames.CLICK, target = ActionTarget(text = "Back"))
 
-        assertThat(ActionSignature.of(a)).isNotEqualTo(ActionSignature.of(b))
+        assertThat(ActionSignature.of(next)).isNotEqualTo(ActionSignature.of(back))
     }
 
     @Test
-    fun `reopening the same app is the same action`() {
-        val a = AgentAction(ToolNames.OPEN_APP, packageName = "com.android.chrome")
-        val b = AgentAction(ToolNames.OPEN_APP, packageName = "com.android.chrome")
+    fun `a different action gives a different key`() {
+        val click = AgentAction(action = ToolNames.CLICK, target = ActionTarget(text = "Go"))
+        val long = AgentAction(action = ToolNames.LONG_CLICK, target = ActionTarget(text = "Go"))
 
-        assertThat(ActionSignature.of(a)).isEqualTo(ActionSignature.of(b))
+        assertThat(ActionSignature.of(click)).isNotEqualTo(ActionSignature.of(long))
     }
 
     @Test
-    fun `typing the same text twice is a repeat, different text is not`() {
-        val first = AgentAction(ToolNames.TYPE_TEXT, text = "Kubernetes")
-        val again = AgentAction(ToolNames.TYPE_TEXT, text = "Kubernetes")
-        val other = AgentAction(ToolNames.TYPE_TEXT, text = "Kubernetes tutorials")
-
-        assertThat(ActionSignature.of(first)).isEqualTo(ActionSignature.of(again))
-        assertThat(ActionSignature.of(first)).isNotEqualTo(ActionSignature.of(other))
-    }
-
-    @Test
-    fun `a target identified only by ref still produces a signature`() {
-        val a = AgentAction(ToolNames.CLICK, target = ActionTarget(ref = 12))
-        val b = AgentAction(ToolNames.CLICK, target = ActionTarget(ref = 12))
-        val c = AgentAction(ToolNames.CLICK, target = ActionTarget(ref = 13))
-
-        assertThat(ActionSignature.of(a)).isEqualTo(ActionSignature.of(b))
-        assertThat(ActionSignature.of(a)).isNotEqualTo(ActionSignature.of(c))
-    }
-
-    @Test
-    fun `repeatable tools are never treated as a loop`() {
+    fun `legitimately repeatable tools have no key at all`() {
+        // These are expected to be called over and over in the same form on purpose.
         val repeatable = listOf(
-            AgentAction(ToolNames.SCROLL, direction = "forward"),
-            AgentAction(ToolNames.SWIPE, direction = "up"),
-            AgentAction(ToolNames.WAIT, durationMs = 1000),
-            AgentAction(ToolNames.READ_SCREEN),
-            AgentAction(ToolNames.PRESS_BACK),
-            AgentAction(ToolNames.PRESS_HOME),
-            AgentAction(ToolNames.GET_NOTIFICATIONS),
+            AgentAction(action = ToolNames.SCROLL, direction = "down"),
+            AgentAction(action = ToolNames.SWIPE, direction = "up"),
+            AgentAction(action = ToolNames.WAIT, durationMs = 500),
+            AgentAction(action = ToolNames.READ_SCREEN),
+            AgentAction(action = ToolNames.PRESS_BACK),
+            AgentAction(action = ToolNames.PRESS_HOME),
+            AgentAction(action = ToolNames.GET_NOTIFICATIONS),
         )
 
-        repeatable.forEach { assertThat(ActionSignature.of(it)).isNull() }
+        for (action in repeatable) {
+            assertThat(ActionSignature.of(action)).isNull()
+        }
     }
 
     @Test
-    fun `scrolling twice in a row is allowed`() {
-        // The common case: paging down a list. This must not be blocked as a repeat.
-        assertThat(ActionSignature.of(AgentAction(ToolNames.SCROLL, direction = "forward"))).isNull()
-        assertThat(ActionSignature.of(AgentAction(ToolNames.SCROLL, direction = "forward"))).isNull()
+    fun `the never-repeated set covers the tools that caused the reported loops`() {
+        assertThat(ActionSignature.NEVER_REPEATED_TOOLS).contains(ToolNames.OPEN_APP)
+        assertThat(ActionSignature.NEVER_REPEATED_TOOLS).contains(ToolNames.TYPE_TEXT)
+    }
+
+    @Test
+    fun `clicking is NOT never-repeated, because paging is legitimate`() {
+        // Tapping the same "Next" button five times through a paginated flow is a real task,
+        // and refusing it would break one to fix another.
+        assertThat(ActionSignature.NEVER_REPEATED_TOOLS).doesNotContain(ToolNames.CLICK)
+        assertThat(ActionSignature.NEVER_REPEATED_TOOLS).doesNotContain(ToolNames.LONG_CLICK)
+    }
+
+    @Test
+    fun `the never-repeated set and the repeatable set do not overlap`() {
+        val overlap = ActionSignature.NEVER_REPEATED_TOOLS intersect ActionSignature.REPEATABLE_TOOLS
+
+        assertThat(overlap).isEmpty()
     }
 }

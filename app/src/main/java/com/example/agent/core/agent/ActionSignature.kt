@@ -26,6 +26,26 @@ object ActionSignature {
         ToolNames.GET_NOTIFICATIONS,
     )
 
+    /**
+     * Tools that should never need to run twice with identical arguments in one task.
+     *
+     * The observation-equality check below cannot catch these on its own, because volatile UI
+     * - the keyboard sliding in, a caret blinking - makes the screen differ between two runs
+     * that accomplished the same nothing. Real screenshots show "Opening com.android.chrome"
+     * five times and "Typing Kubernetes" six times for a task that only needed each once.
+     *
+     * Deliberately excludes click and long_click: tapping the same "Next" button five times
+     * through a paginated flow is legitimate, and refusing it would break real tasks.
+     */
+    val NEVER_REPEATED_TOOLS = setOf(
+        ToolNames.OPEN_APP,
+        ToolNames.CLOSE_APP,
+        ToolNames.LAUNCH_URL,
+        ToolNames.TYPE_TEXT,
+        ToolNames.ASK_USER,
+        ToolNames.FINISH,
+    )
+
     /** @return a stable key for the action, or null if it is legitimately repeatable. */
     fun of(action: AgentAction): String? {
         if (action.action in REPEATABLE_TOOLS) return null

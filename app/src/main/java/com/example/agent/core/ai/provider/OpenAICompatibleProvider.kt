@@ -2,6 +2,7 @@ package com.example.agent.core.ai.provider
 
 import com.example.agent.core.ai.AIProvider
 import com.example.agent.core.ai.AgentActionCodec
+import com.example.agent.core.ai.DecodedCall
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.ai.AgentToolSpec
@@ -103,8 +104,10 @@ class OpenAICompatibleProvider(
             )
 
         // Every call, not just the first: the loop batches, so one turn can carry several.
-        val calls = (message["tool_calls"] as? JsonArray).orEmpty().mapNotNull { element ->
-            val call = element as? JsonObject ?: return@mapNotNull null
+        val calls = mutableListOf<AgentActionCall>()
+        val malformed = mutableListOf<String>()
+        for (element in (message["tool_calls"] as? JsonArray).orEmpty()) {
+            val call = element as? JsonObject ?: continue
             val function = call["function"] as? JsonObject
             val toolName = (function?.get("name") as? JsonPrimitive)?.content
             val arguments = when (val el = function?.get("arguments")) {
@@ -112,13 +115,18 @@ class OpenAICompatibleProvider(
                 is JsonObject -> el.toString() // a few gateways send an object, not a string
                 else -> null
             }
-            AgentActionCodec.fromToolCallJson(toolName, arguments)
-                ?.let { AgentActionCall((call["id"] as? JsonPrimitive)?.content, it) }
+            when (val decoded = AgentActionCodec.decodeJson(toolName, arguments)) {
+                null -> Unit
+                is DecodedCall.Ok ->
+                    calls += AgentActionCall((call["id"] as? JsonPrimitive)?.content, decoded.action)
+                is DecodedCall.Malformed -> malformed += decoded.detail
+            }
         }
 
-        if (calls.isNotEmpty()) {
+        if (calls.isNotEmpty() || malformed.isNotEmpty()) {
             return AgentResponse(
                 calls = calls,
+                malformed = malformed,
                 raw = raw,
                 inputTokens = inputTokens,
                 outputTokens = outputTokens,

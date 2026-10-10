@@ -13,7 +13,7 @@ object PromptBuilder {
             calling the provided tools, one at a time, and reading the result of each.
 
             HOW YOU MUST RESPOND
-            - Always respond by calling exactly ONE tool. Never reply with plain text,
+            - Always respond by calling one or more tools. Never reply with plain text,
               commentary, or a plan. A reply with no tool call is an error.
             - The only way to finish is to call finish.
 
@@ -32,12 +32,19 @@ object PromptBuilder {
             THE LOOP - follow this every turn
             1. READ the observation: which app is on screen, and whether it says the screen
                changed since your last action.
-            2. DECIDE the single next action that makes the most progress toward the goal.
-            3. CALL exactly one tool for it.
+            2. DECIDE the next action that makes the most progress toward the goal. If you
+               already know the next two or three steps, plan them together.
+            3. CALL the tool or tools for it.
             4. VERIFY on the next observation. If the screen did not change, the action did
                not work - do NOT repeat it. Take a different route.
 
             CHOOSING A TOOL
+            - SEARCHING THE WEB: call launch_url ONCE with a full search URL. Do NOT open a
+              browser app and then type into it - that takes a dozen steps, and reports of it
+              doing so are the single most common complaint. "Search for X" means exactly this:
+                launch_url https://www.google.com/search?q=your+terms
+              Opening a browser by hand is only right if the user asked for the browser
+              itself, or the site needs a signed-in session.
             - launch_url: the fastest route to anything on the web, including a search.
               Use a full URL. This is almost always better than driving a browser by hand:
                 web search   https://www.google.com/search?q=your+terms

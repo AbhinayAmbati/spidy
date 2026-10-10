@@ -11,13 +11,16 @@ import android.os.Build
 import android.os.IBinder
 import com.example.agent.MainActivity
 import com.example.agent.R
+import com.example.agent.automation.overlay.AgentStatusOverlay
 import com.example.agent.core.agent.AgentRuntime
+import com.example.agent.core.agent.AgentStatusText
 import com.example.agent.domain.model.TaskState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,6 +36,7 @@ class AgentForegroundService : Service() {
     @Inject lateinit var runtime: AgentRuntime
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var overlay: AgentStatusOverlay? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -47,22 +51,39 @@ class AgentForegroundService : Service() {
 
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Working…"))
+        overlay = AgentStatusOverlay(this)
 
         scope.launch {
             runtime.progress.collectLatest { progress ->
-                when {
-                    progress.state.isTerminal -> stopSelf()
-                    else -> {
-                        val text = progress.message ?: "Working…"
-                        notify(buildNotification(text))
+                val status = AgentStatusText.line(progress)
+
+                if (progress.state.isTerminal) {
+                    // Show the outcome briefly, then go. A task that finished while the user
+                    // was in another app used to make the overlay just vanish, which tells
+                    // them nothing at all.
+                    if (status != null && AgentStatusText.showsOutcome(progress.state)) {
+                        overlay?.show(status, progress.state)
+                        notify(buildNotification(status))
+                        delay(AgentStatusText.LINGER_MILLIS)
                     }
+                    stopSelf()
+                    return@collectLatest
                 }
+
+                if (status == null) {
+                    overlay?.hide()
+                } else {
+                    overlay?.show(status, progress.state)
+                }
+                notify(buildNotification(progress.message ?: status ?: "Working…"))
             }
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
+        overlay?.hide()
+        overlay = null
         scope.cancel()
         super.onDestroy()
     }

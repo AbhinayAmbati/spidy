@@ -11,7 +11,11 @@ import com.example.agent.domain.model.AppearanceMode
 import com.example.agent.domain.model.ProviderConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -39,6 +43,26 @@ class SettingsViewModel @Inject constructor(
 
     private val _permissions = MutableStateFlow(PermissionUtils.status(context))
     val permissions: StateFlow<PermissionStatus> = _permissions
+
+    /**
+     * Whether the status overlay is allowed to draw over other apps.
+     *
+     * Granted on a *system* screen, not a dialog, so this has to be re-read when the user
+     * comes back rather than assumed.
+     */
+    private val _overlayAllowed = MutableStateFlow(Settings.canDrawOverlays(context))
+    val overlayAllowed: StateFlow<Boolean> = _overlayAllowed.asStateFlow()
+
+    fun refreshOverlayPermission() {
+        _overlayAllowed.value = Settings.canDrawOverlays(context)
+    }
+
+    fun openOverlaySettings() {
+        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+            .setData(Uri.parse("package:${context.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(intent) }
+    }
 
     fun refreshPermissions() {
         _permissions.value = PermissionUtils.status(context)
