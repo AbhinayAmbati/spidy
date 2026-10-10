@@ -1,5 +1,8 @@
 package com.example.agent.ui.settings
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -53,15 +56,20 @@ fun SettingsScreen(
     val touchToStop by viewModel.touchToStop.collectAsStateWithLifecycle()
     val overlayAllowed by viewModel.overlayAllowed.collectAsStateWithLifecycle()
 
-    // The permission is granted on a system screen, so the state has to be re-read on the way
-    // back or the row would still say "Grant" after the user had already granted it.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshOverlayPermission() }
-    val permissions by viewModel.permissions.collectAsStateWithLifecycle()
+    // Overlay permission, accessibility and notification access are all granted on *system*
+    // screens, so the state has to be re-read on the way back or a card would still say
+    // "Enable" after the user had already enabled it. A one-shot LaunchedEffect(Unit) never
+    // re-runs when the user comes back.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshOverlayPermission()
+        viewModel.refreshPermissions()
+    }
 
-    // Accessibility and notification access are granted in *system* settings, so
-    // re-read on resume. A one-shot LaunchedEffect(Unit) never re-runs when the
-    // user comes back, which left "Enable" on screen after it was already on.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshPermissions() }
+    // Granting notifications is a real dialog, so the card is re-read when it closes.
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { viewModel.refreshPermissions() }
+    val permissions by viewModel.permissions.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -110,11 +118,26 @@ fun SettingsScreen(
             onAction = { context.startActivity(PermissionUtils.accessibilitySettingsIntent()) },
         )
         Spacer(Modifier.height(SpideySpacing.md))
+        // Two genuinely different things, and conflating them is what made this card claim
+        // notifications were off while they were on. "Notifications" is the POST_NOTIFICATIONS
+        // runtime permission - it is what lets the agent's progress be seen at all.
+        // "Notification access" is a separate system switch that lets the agent *read* other
+        // apps' notifications, and is optional.
         PermissionCard(
             title = "Notifications",
-            body = "Used to show the agent's progress while it works and to read notifications if you allow it.",
+            body = "Lets Spidey show its progress while it works. Without it you will not see " +
+                "the agent's status once it leaves this app.",
+            granted = permissions.notificationsGranted,
+            actionLabel = "Enable notifications",
+            onAction = { notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+        )
+        Spacer(Modifier.height(SpideySpacing.md))
+        PermissionCard(
+            title = "Notification access",
+            body = "Optional, and separate from notifications above. Lets Spidey read your " +
+                "notifications when a task asks it to. Everything else works without it.",
             granted = permissions.notificationListenerEnabled,
-            actionLabel = "Open notification settings",
+            actionLabel = "Open notification access",
             onAction = { context.startActivity(PermissionUtils.notificationListenerSettingsIntent()) },
         )
 

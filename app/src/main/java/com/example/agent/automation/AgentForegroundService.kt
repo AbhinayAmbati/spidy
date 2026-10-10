@@ -81,6 +81,22 @@ class AgentForegroundService : Service() {
         return START_NOT_STICKY
     }
 
+    /**
+     * The user swiped the app out of recents.
+     *
+     * The overlay is a *system* window, so it belongs to nothing that the task being gone
+     * removes - it would sit over whatever the user opened next, for ever. Stopping the task
+     * is also the right reading of the gesture: they dismissed the app, so they want it to
+     * stop.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        overlay?.hide()
+        overlay = null
+        runtime.stop(STOPPED_APP_CLOSED)
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         overlay?.hide()
         overlay = null
@@ -130,6 +146,7 @@ class AgentForegroundService : Service() {
         private const val CHANNEL_ID = "spidey_agent"
         private const val ACTION_STOP = "com.example.agent.action.STOP"
         private const val NOTIFICATION_ID = 42
+        private const val STOPPED_APP_CLOSED = "Stopped: the app was closed."
 
         fun start(context: Context) {
             val intent = Intent(context, AgentForegroundService::class.java)

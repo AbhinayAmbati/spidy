@@ -46,6 +46,19 @@ object ActionSignature {
         ToolNames.FINISH,
     )
 
+    /**
+     * Per-task caps on tool *kinds*, ignoring the arguments entirely.
+     *
+     * A signature cannot catch a loop where the model rephrases each time - "nallaru po", then
+     * "Nallaru Po song" - because the signature is different every time and both caps above
+     * miss. But a search launched four times in one task is a loop whatever the query says.
+     */
+    val TOOL_CAPS = mapOf(
+        ToolNames.LAUNCH_URL to 3,
+        ToolNames.TYPE_TEXT to 6,
+        ToolNames.OPEN_APP to 4,
+    )
+
     /** @return a stable key for the action, or null if it is legitimately repeatable. */
     fun of(action: AgentAction): String? {
         if (action.action in REPEATABLE_TOOLS) return null

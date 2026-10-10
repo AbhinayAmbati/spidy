@@ -79,4 +79,35 @@ class ActionSignatureTest {
 
         assertThat(overlap).isEmpty()
     }
+
+    // ------------------------------------------------------------------ per-tool caps
+
+    @Test
+    fun `the search tools carry a per-tool cap, because a reworded query is a new signature`() {
+        // "nallaru po", then "Nallaru Po song" - different signatures, so the identical-action
+        // caps miss entirely. This is the rule that catches it.
+        assertThat(ActionSignature.TOOL_CAPS).containsKey(ToolNames.LAUNCH_URL)
+        assertThat(ActionSignature.TOOL_CAPS).containsKey(ToolNames.TYPE_TEXT)
+    }
+
+    @Test
+    fun `a per-tool cap never contradicts the repeatable set`() {
+        val contradiction = ActionSignature.TOOL_CAPS.keys intersect ActionSignature.REPEATABLE_TOOLS
+
+        assertThat(contradiction).isEmpty()
+    }
+
+    @Test
+    fun `tapping has no per-tool cap, only the identical-action one`() {
+        // Clicking through a long list is bounded by the identical-action cap instead; a
+        // per-tool cap here would refuse a legitimate fifth tap.
+        assertThat(ActionSignature.TOOL_CAPS).doesNotContainKey(ToolNames.CLICK)
+    }
+
+    @Test
+    fun `every per-tool cap is at least two, so a legitimate repeat still works`() {
+        for ((tool, cap) in ActionSignature.TOOL_CAPS) {
+            assertThat(cap).isAtLeast(2)
+        }
+    }
 }

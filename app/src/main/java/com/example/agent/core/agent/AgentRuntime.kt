@@ -242,6 +242,8 @@ class AgentRuntime(
         var nudges = 0
         // How many times each exact action has run this task. See NEVER_REPEATED_TOOLS.
         val signatureRuns = mutableMapOf<String, Int>()
+        // Per-tool counts, which ignore the arguments. See ActionSignature.TOOL_CAPS.
+        val toolRuns = mutableMapOf<String, Int>()
         // Loop protection. The most common failure is running the same action over and
         // over — opening an app already on screen, or retyping text that is already there.
         // The prompt forbids it, but that cannot be relied on.
@@ -510,16 +512,42 @@ class AgentRuntime(
                     // whether the screen changed, because the screen almost always *does*
                     // change - and two runs that accomplished the same nothing still look
                     // different to a snapshot.
-                    if (sig != null && action.action in ActionSignature.NEVER_REPEATED_TOOLS) {
+                    val identicalCap = when {
+                        sig == null -> null
+                        action.action in ActionSignature.NEVER_REPEATED_TOOLS -> MAX_IDENTICAL_RUNS
+                        else -> MAX_IDENTICAL_RUNS_GENERIC
+                    }
+                    if (sig != null && identicalCap != null) {
                         val runs = (signatureRuns[sig] ?: 0) + 1
                         signatureRuns[sig] = runs
-                        if (runs > MAX_IDENTICAL_RUNS) {
+                        if (runs > identicalCap) {
                             markStep(steps, index, StepStatus.Failed, "Already done — nothing gained")
                             recordResult(
                                 "\"${action.action}\" with exactly these arguments has already " +
                                     "run and got you nowhere. Running it again will not help. " +
                                     "Read the screen and pick a different element, or call " +
                                     "finish if the task is already done.",
+                            )
+                            break
+                        }
+                    }
+
+                    // The same tool, over and over, with the arguments changed each time. A
+                    // search that has already returned results is the case that matters: the
+                    // model rephrases the query and searches again, and the page it gets back
+                    // is the same page it already had.
+                    val toolCap = ActionSignature.TOOL_CAPS[action.action]
+                    if (toolCap != null) {
+                        val runs = (toolRuns[action.action] ?: 0) + 1
+                        toolRuns[action.action] = runs
+                        if (runs > toolCap) {
+                            markStep(steps, index, StepStatus.Failed, "Stuck repeating ${action.action}")
+                            recordResult(
+                                "You have now called ${action.action} $runs times in this task " +
+                                    "and the screen is no closer to the goal. Do NOT call it " +
+                                    "again. If search results are already showing, tap the one " +
+                                    "you want, or call finish if what the task asked for is " +
+                                    "already on screen.",
                             )
                             break
                         }
@@ -869,6 +897,15 @@ class AgentRuntime(
          * that unblocked a task, and the screenshots that prompted this show five and six.
          */
         const val MAX_IDENTICAL_RUNS = 2
+
+        /**
+         * The same cap for everything else that is not legitimately repeatable.
+         *
+         * Higher than [MAX_IDENTICAL_RUNS], because tapping the same "Next" button through a
+         * paginated list is a real task. Four taps is the point at which it has stopped being
+         * paging and started being a loop.
+         */
+        const val MAX_IDENTICAL_RUNS_GENERIC = 4
 
         /** Consecutive steps with an unchanged screen before we stop for lack of progress. */
         const val MAX_STALLED_STEPS = 4

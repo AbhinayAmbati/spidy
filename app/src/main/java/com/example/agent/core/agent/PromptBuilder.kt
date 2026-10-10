@@ -38,6 +38,13 @@ object PromptBuilder {
             4. VERIFY on the next observation. If the screen did not change, the action did
                not work - do NOT repeat it. Take a different route.
 
+            DO NOT SEARCH TWICE
+            - Once a search has returned results, do NOT search again. The same query returns
+              the same page, and a reworded one returns almost the same page. If results are on
+              screen, tap the one you want, or call finish.
+            - If what the task asked for is ALREADY on screen, call finish. Do not re-run the
+              step that produced it in order to be sure.
+
             CHOOSING A TOOL
             - SEARCHING THE WEB: call launch_url ONCE with a full search URL. Do NOT open a
               browser app and then type into it - that takes a dozen steps, and reports of it
