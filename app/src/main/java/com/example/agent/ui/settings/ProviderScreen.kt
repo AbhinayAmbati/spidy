@@ -1,5 +1,11 @@
 package com.example.agent.ui.settings
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.WindowManager
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +62,11 @@ fun ProviderScreen(
     val maskedKey by viewModel.maskedKey.collectAsStateWithLifecycle()
     val testState by viewModel.testState.collectAsStateWithLifecycle()
     val storageError = viewModel.credentialStorageError
+
+    // This screen holds an API key, so it is excluded from screenshots and from the recents
+    // thumbnail. Without this the key - or the masked key and the endpoint it belongs to - is
+    // captured by any screenshot, by the task switcher, and by a screen recorder.
+    KeepOffScreenshots()
 
     Column(
         modifier = Modifier
@@ -275,4 +286,27 @@ private fun ModelPicker(
             )
         }
     }
+}
+
+/**
+ * Marks the current window as not safe for screenshots.
+ *
+ * Set while the key screen is composed and cleared when it leaves, so the rest of the app is
+ * unaffected. Walking the context wrappers is necessary because a Compose `LocalContext` is
+ * usually a `ContextThemeWrapper` rather than the Activity itself.
+ */
+@Composable
+private fun KeepOffScreenshots() {
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val window = context.findActivity()?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

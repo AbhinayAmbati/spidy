@@ -34,6 +34,18 @@ jobs:
       - name: Check cross-package imports
         run: python3 tools/check_imports.py app/src
 
+      # Catches a symbol used without its import - framework and Compose symbols that
+      # check_imports does not cover, and which would otherwise cost a full Gradle run.
+      - name: Check symbol imports
+        run: python3 tools/check_symbols.py app/src
+
+      # Report only, deliberately. Lint has never been triaged against a real device, and a
+      # red build for a cosmetic warning would block every release. Its output lands in the
+      # run log so the findings can be worked through deliberately.
+      - name: Lint report (non-gating)
+        continue-on-error: true
+        run: ./gradlew lintDebug --stacktrace
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 

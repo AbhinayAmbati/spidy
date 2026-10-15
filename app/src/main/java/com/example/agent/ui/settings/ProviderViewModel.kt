@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AIProviderFactory
+import com.example.agent.core.security.EndpointPolicy
 import com.example.agent.data.preferences.SettingsRepository
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.MessageRole
@@ -173,6 +174,8 @@ class ProviderViewModel @Inject constructor(
 
     /** @throws Exception when the credential write fails, so the caller can report it. */
     private suspend fun persist() {
+        val endpoint = _baseUrl.value.ifBlank { _selected.value.defaultBaseUrl }
+        EndpointPolicy.rejectionReason(endpoint)?.let { throw IllegalArgumentException(it) }
         settings.saveProvider(
             type = _selected.value,
             model = _model.value.ifBlank { _selected.value.defaultModel },

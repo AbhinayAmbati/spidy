@@ -101,4 +101,63 @@ class ContextCompactorTest {
         val results = compacted.filter { it.role == MessageRole.Tool }
         assertThat(results.map { it.toolCallId }).containsExactlyElementsIn(calls.map { it.toolCallId })
     }
+
+    @Test
+    fun `a cut that lands inside a tool pair drops the orphan, it does not keep it`() {
+        // An odd-length conversation puts the trim boundary on a tool result rather than on
+        // the assistant turn that owns it. That used to produce an orphaned result, which
+        // providers reject outright - the request fails, rather than merely losing context.
+        val messages = conversation(7) + AgentMessage(MessageRole.User, "keep going")
+        assertThat(messages.size).isEqualTo(ContextCompactor.MAX_MESSAGES + 1)
+
+        val compacted = ContextCompactor.compact(messages)
+
+        val callIds = compacted
+            .filter { it.role == MessageRole.Assistant && it.toolCallId != null }
+            .mapNotNull { it.toolCallId }
+            .toSet()
+        val orphaned = compacted
+            .filter { it.role == MessageRole.Tool }
+            .filterNot { it.toolCallId in callIds }
+        assertThat(orphaned).isEmpty()
+
+        // Not vacuous: the tail really does carry pairs, so an orphan had somewhere to hide.
+        assertThat(callIds).isNotEmpty()
+        assertThat(callIds).contains("call_7")
+    }
+
+    @Test
+    fun `a batch keeps every result paired with its single call`() {
+        // Batching means one assistant turn owns several results, so the boundary is far more
+        // likely to fall inside a group.
+        val batch = AgentMessage(MessageRole.Assistant, "", toolCallId = "call_1", name = "open_app")
+        val results = (1..3).map {
+            AgentMessage(MessageRole.Tool, "Observation:\nSCREEN_$it", toolCallId = "call_1", name = "open_app")
+        }
+        // Filler BEFORE the batch, so the batch itself survives the trim - otherwise the test
+        // proves nothing, because there would be no results left to orphan.
+        val filler = (10..30).map { AgentMessage(MessageRole.User, "filler $it") }
+
+        val compacted = ContextCompactor.compact(listOf(system(), task()) + filler + listOf(batch) + results)
+
+        val kept = compacted.filter { it.toolCallId == "call_1" }
+        assertThat(kept.map { it.role }).contains(MessageRole.Assistant)
+        assertThat(kept.count { it.role == MessageRole.Tool }).isEqualTo(results.size)
+
+        val callIds = compacted
+            .filter { it.role == MessageRole.Assistant && it.toolCallId != null }
+            .mapNotNull { it.toolCallId }
+            .toSet()
+        val orphaned = compacted.filter { it.role == MessageRole.Tool }
+            .filterNot { it.toolCallId in callIds }
+        assertThat(orphaned).isEmpty()
+    }
+
+    @Test
+    fun `dropping orphans never overruns the bound`() {
+        for (observations in 6..40) {
+            val compacted = ContextCompactor.compact(conversation(observations))
+            assertThat(compacted.size).isAtMost(ContextCompactor.MAX_MESSAGES)
+        }
+    }
 }

@@ -240,8 +240,28 @@ class AgentRuntime(
         var replaying = routine != null
 
         var nudges = 0
+        var stallRecoveries = 0
         // How many times each exact action has run this task. See NEVER_REPEATED_TOOLS.
         val signatureRuns = mutableMapOf<String, Int>()
+        // Everything tried this task, keyed by action signature, so the model can be shown
+        // what it has already spent instead of being refused after the fact.
+        val attempts = LinkedHashMap<String, Attempt>()
+        val toolsUsed = linkedSetOf<String>()
+
+        /**
+         * The tools this task has not touched at all.
+         *
+         * Declared here rather than beside the other helpers because the stall check at the
+         * top of the loop needs it, and a local function must be declared before it is used.
+         *
+         * Sent with every observation, because "what have I not tried" is the question the
+         * agent could not answer for itself - and the answer is almost always something more
+         * useful than the fourth repeat of the same action.
+         */
+        fun ledgerBlock(): String? = AttemptLedger.render(
+            attempts.values,
+            registry.specs().map { it.name }.filterNot { it in toolsUsed },
+        )
         // Per-tool counts, which ignore the arguments. See ActionSignature.TOOL_CAPS.
         val toolRuns = mutableMapOf<String, Int>()
         // Loop protection. The most common failure is running the same action over and
@@ -277,12 +297,36 @@ class AgentRuntime(
             for (step in 0 until TaskProgress.MAX_AGENT_STEPS) {
                 if (AgentHalt.isStopped) throw kotlinx.coroutines.CancellationException("Stopped by the user")
 
+                // A stall used to end the task. That was the wrong call: nothing on screen
+                // changing does not mean the task is impossible, it means the agent has run
+                // out of ideas - and it had never been told what it had already spent. So it
+                // is told, and given a few goes at a different route before giving up.
                 if (consecutiveUnchanged >= MAX_STALLED_STEPS) {
+                    if (stallRecoveries < MAX_STALL_RECOVERIES) {
+                        stallRecoveries++
+                        consecutiveUnchanged = 0
+                        messages += AgentMessage(
+                            MessageRole.User,
+                            PromptBuilder.observationMessage(
+                                buildString {
+                                    appendLine(
+                                        "Nothing on screen has changed for several steps, so " +
+                                            "you are stuck. Do NOT repeat what you have been " +
+                                            "doing — it will be refused.",
+                                    )
+                                    appendLine()
+                                    ledgerBlock()?.let { append(it) }
+                                },
+                            ),
+                        )
+                        trim(messages)
+                        continue
+                    }
                     finish(
                         taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
-                        "Nothing on screen has changed for the last $consecutiveUnchanged steps, " +
-                            "so I stopped rather than keep repeating myself. Tell me the exact " +
-                            "element to use, or rephrase the task.",
+                        "Nothing on screen changed for several steps and I had no untried route " +
+                            "left, so I stopped rather than keep repeating myself. Tell me the " +
+                            "exact element to use, or rephrase the task.",
                     )
                     return
                 }
@@ -424,6 +468,9 @@ class AgentRuntime(
                 for ((callIndex, call) in calls.withIndex()) {
                     val action = call.action
                     val callRef = callRefs[callIndex]
+                    // Computed here, not further down: recordAttempt below needs it, and a
+                    // local must be declared before it is used.
+                    val sig = ActionSignature.of(action)
 
                     // Streak of one tool in a row. Repeatable tools (scroll, wait, back) are
                     // exempt, because using them several times in a row is legitimate.
@@ -447,10 +494,25 @@ class AgentRuntime(
                         message = label,
                     )
 
+                    fun recordAttempt(outcome: AttemptOutcome, detail: String? = null) {
+                        // Repeatable tools (scroll, wait, back) are excluded: using them again
+                        // is the point of them, and listing them as spent would be wrong.
+                        val key = sig ?: return
+                        toolsUsed += action.action
+                        val label = describe(action)
+                        val existing = attempts[key]
+                        attempts[key] = existing?.copy(
+                            outcome = outcome,
+                            detail = detail ?: existing.detail,
+                            count = existing.count + 1,
+                        ) ?: Attempt(label, outcome, detail)
+                    }
+
                     fun recordResult(text: String) {
+                        val body = ledgerBlock()?.let { "$text\n\n$it" } ?: text
                         messages += AgentMessage(
                             role = MessageRole.Tool,
-                            content = text,
+                            content = body,
                             toolCallId = callRef.id,
                             name = callRef.name,
                         )
@@ -459,8 +521,6 @@ class AgentRuntime(
 
                     // Declared before the local functions below: a local function can only see
                     // variables declared above it, and observeAfterAction needs this.
-                    val sig = ActionSignature.of(action)
-
                     data class AfterAction(val text: String, val settleMillis: Long, val observeMillis: Long)
 
                     /**
@@ -532,6 +592,7 @@ class AgentRuntime(
                         signatureRuns[sig] = runs
                         if (runs > identicalCap) {
                             markStep(steps, index, StepStatus.Failed, "Already done — nothing gained")
+                            recordAttempt(AttemptOutcome.Refused)
                             recordResult(
                                 "\"${action.action}\" with exactly these arguments has already " +
                                     "run and got you nowhere. Running it again will not help. " +
@@ -552,6 +613,7 @@ class AgentRuntime(
                         toolRuns[action.action] = runs
                         if (runs > toolCap) {
                             markStep(steps, index, StepStatus.Failed, "Stuck repeating ${action.action}")
+                            recordAttempt(AttemptOutcome.Refused)
                             recordResult(
                                 "You have now called ${action.action} $runs times in this task " +
                                     "and the screen is no closer to the goal. Do NOT call it " +
@@ -574,6 +636,7 @@ class AgentRuntime(
 
                         if (refusals >= MAX_REPEAT_REFUSALS) {
                             markStep(steps, index, StepStatus.Failed, "Repeated with no progress")
+                            recordAttempt(AttemptOutcome.Refused)
                             finish(
                                 taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
                                 "I kept repeating the same action and the screen never changed, so I " +
@@ -584,6 +647,7 @@ class AgentRuntime(
                         }
 
                         markStep(steps, index, StepStatus.Failed, "Already tried — nothing changed")
+                        recordAttempt(AttemptOutcome.Refused)
                         recordResult(
                             "You already ran this exact action and the screen has NOT changed. " +
                                 "Running it again will not help. Do something different now: " +
@@ -597,6 +661,7 @@ class AgentRuntime(
                         is ActionValidator.Outcome.Rejected -> {
                             markStep(steps, index, StepStatus.Failed, outcome.reason)
                             recordResult("That action was not allowed: ${outcome.reason}")
+                            recordAttempt(AttemptOutcome.Failed, outcome.reason)
                             break
                         }
                         is ActionValidator.Outcome.RequiresConfirmation -> {
@@ -617,6 +682,7 @@ class AgentRuntime(
                 if (tool == null) {
                     markStep(steps, index, StepStatus.Failed, "Unknown tool: ${action.action}")
                     recordResult("There is no tool called ${action.action}.")
+                    recordAttempt(AttemptOutcome.Failed, "no such tool")
                     break
                 }
 
@@ -635,6 +701,7 @@ class AgentRuntime(
                         if (nonMutating) {
                             // The tool's own result already carries the screen, and nothing it
                             // did can have changed it.
+                            recordAttempt(AttemptOutcome.Succeeded)
                             recordResult(result.observation)
                             setMetrics(
                                 steps, index,
@@ -642,6 +709,16 @@ class AgentRuntime(
                             )
                         } else {
                             val after = observeAfterAction()
+                            // Recorded after observing, because a call that "succeeded" and
+                            // moved nothing is still a spent attempt - and "nothing changed" is
+                            // the framing that stops the model proposing it again.
+                            recordAttempt(
+                                if (after.text == UNCHANGED_NOTE) {
+                                    AttemptOutcome.NoChange
+                                } else {
+                                    AttemptOutcome.Succeeded
+                                },
+                            )
                             recordResult(after.text)
                             setMetrics(steps, index, metricsFor(after, actionMillis))
                         }
@@ -656,6 +733,7 @@ class AgentRuntime(
                     }
                     is ToolResult.Failure -> {
                         markStep(steps, index, StepStatus.Failed, result.message)
+                        recordAttempt(AttemptOutcome.Failed, result.message)
                         // A replay step that no longer matches means the screens have moved
                         // on. Hand the task to the model from here rather than failing.
                         if (replaying) replaying = false
@@ -725,10 +803,11 @@ class AgentRuntime(
             deferred.await()
         } finally {
             confirmation = null
-            _progress.value = _progress.value.copy(
-                state = TaskState.EXECUTING,
-                awaitingKind = com.example.agent.domain.model.AwaitingKind.None,
-            )
+            // Only restore the running state if the task is still running. Stopping while a
+            // confirmation is on screen sets CANCELLED, and this ran on the way out and wrote
+            // EXECUTING back over it - so a task the user had just stopped went on claiming to
+            // be working, with nothing driving it.
+            restoreRunningState()
         }
     }
 
@@ -744,11 +823,24 @@ class AgentRuntime(
             deferred.await()
         } finally {
             question = null
-            _progress.value = _progress.value.copy(
-                state = TaskState.EXECUTING,
-                awaitingKind = com.example.agent.domain.model.AwaitingKind.None,
-            )
+            // Same guard as awaitConfirmation: a cancelled task must not be flipped back to
+            // running by the cleanup of the question it was waiting on.
+            restoreRunningState()
         }
+    }
+
+    /**
+     * Returns the task to its running state after a confirmation or a question.
+     *
+     * Does nothing once the task has finished, failed or been cancelled - writing EXECUTING
+     * unconditionally is what made Stop while awaiting report a running task.
+     */
+    private fun restoreRunningState() {
+        if (_progress.value.state.isTerminal) return
+        _progress.value = _progress.value.copy(
+            state = TaskState.EXECUTING,
+            awaitingKind = AwaitingKind.None,
+        )
     }
 
     private fun markStep(
@@ -941,6 +1033,15 @@ class AgentRuntime(
 
         /** Consecutive steps with an unchanged screen before we stop for lack of progress. */
         const val MAX_STALLED_STEPS = 4
+
+        /**
+         * How many times a stalled run is redirected before it is given up on.
+         *
+         * A stall means the agent has run out of ideas, not that the task is impossible, so it
+         * is told what it has already spent and given another go. Two redirections is enough
+         * to prove it is genuinely stuck rather than momentarily out of step.
+         */
+        const val MAX_STALL_RECOVERIES = 2
 
         /** Consecutive uses of one tool before we stop - the agent is hammering it. */
         const val MAX_SAME_TOOL_STREAK = 4

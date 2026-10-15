@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The app sends the user's screen content and prompts to a configured provider, so no request
+  may ever leave in the clear.
+
+  cleartextTrafficPermitted="false" applies to every domain. There is deliberately no
+  exception list: a self-hosted endpoint on a local network is a real use case, but the answer
+  to that is a tunnel or a certificate, not a hole in this file. EndpointPolicy says the same
+  thing in the UI, where the user can act on it.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

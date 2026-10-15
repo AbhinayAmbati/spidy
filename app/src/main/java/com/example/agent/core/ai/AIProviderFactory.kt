@@ -3,6 +3,7 @@ package com.example.agent.core.ai
 import com.example.agent.core.ai.provider.AnthropicProvider
 import com.example.agent.core.ai.provider.GeminiProvider
 import com.example.agent.core.ai.provider.OpenAICompatibleProvider
+import com.example.agent.core.security.EndpointPolicy
 import com.example.agent.core.security.SecureCredentialStore
 import com.example.agent.domain.model.ProviderConfig
 import com.example.agent.domain.model.ProviderType
@@ -15,6 +16,11 @@ class AIProviderFactory(
     private val credentials: SecureCredentialStore,
 ) {
     fun create(config: ProviderConfig): AIProvider {
+        // Defence in depth: the settings screen refuses a bad endpoint, but a value saved by an
+        // older build is still on disk, and this is the last point before it is dialled.
+        EndpointPolicy.rejectionReason(config.baseUrl)?.let { reason ->
+            throw AIProviderException(AIProviderException.Kind.Unknown, reason)
+        }
         val key = credentials.getApiKey(config.type)
         return when (config.type) {
             ProviderType.OPENAI,

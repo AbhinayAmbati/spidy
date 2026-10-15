@@ -37,12 +37,28 @@ object ContextCompactor {
         return collapsed
     }
 
-    /** Trims the middle, keeping the system prompt, the task, and the recent exchanges. */
+    /**
+     * Trims the middle, keeping the system prompt, the task, and the recent exchanges.
+     *
+     * The cut must never land between a tool call and its results. Providers pair a result to
+     * its call by id and reject an orphan outright, so a mid-pair cut does not merely lose
+     * context - it fails the request. With batching, one assistant turn can own several
+     * results, which makes the boundary far more likely to fall inside a group.
+     */
     private fun bound(messages: List<AgentMessage>): List<AgentMessage> {
         if (messages.size <= MAX_MESSAGES) return messages
+
         val head = messages.take(2)
-        val tail = messages.takeLast(MAX_MESSAGES - 2)
-        return head + tail
+        var start = messages.size - (MAX_MESSAGES - 2)
+
+        // A result whose tool call was cut is an orphan: providers pair a result to its call by
+        // id and reject the request outright, so this is not merely lost context - it is a
+        // failed request. Rather than pull the call back in (which would exceed the bound),
+        // drop the orphans: they answer a call the model can no longer see. With batching one
+        // call can own several results, so this skips a run of them.
+        while (start < messages.size && messages[start].role == MessageRole.Tool) start++
+
+        return head + messages.subList(start, messages.size)
     }
 
     private fun collapse(messages: List<AgentMessage>): List<AgentMessage> {
