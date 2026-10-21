@@ -3,21 +3,33 @@ package com.example.agent.ui.settings
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Accessibility
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.TouchApp
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -31,12 +43,14 @@ import com.example.agent.R
 import com.example.agent.core.permissions.PermissionStatus
 import com.example.agent.core.permissions.PermissionUtils
 import com.example.agent.domain.model.AppearanceMode
-import com.example.agent.ui.components.ChipRow
-import com.example.agent.ui.components.ClickableSpideyCard
-import com.example.agent.ui.components.PermissionCard
-import com.example.agent.ui.components.SecondaryButton
-import com.example.agent.ui.components.SectionHeader
-import com.example.agent.ui.components.SpideyCard
+import com.example.agent.ui.components.Chevron
+import com.example.agent.ui.components.ConfirmDialog
+import com.example.agent.ui.components.IconBadge
+import com.example.agent.ui.components.ListRow
+import com.example.agent.ui.components.RingAvatar
+import com.example.agent.ui.components.RowDivider
+import com.example.agent.ui.components.SectionLabel
+import com.example.agent.ui.components.SegmentedControl
 import com.example.agent.ui.components.SwitchRow
 import com.example.agent.ui.components.TabTitle
 import com.example.agent.ui.theme.SpideySpacing
@@ -69,15 +83,15 @@ fun SettingsScreen(
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
 
     // Overlay permission, accessibility and notification access are all granted on *system*
-    // screens, so the state has to be re-read on the way back or a card would still say
-    // "Enable" after the user had already enabled it. A one-shot LaunchedEffect(Unit) never
+    // screens, so the state has to be re-read on the way back or a row would still say
+    // "Off" after the user had already enabled it. A one-shot LaunchedEffect(Unit) never
     // re-runs when the user comes back.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshOverlayPermission()
         viewModel.refreshPermissions()
     }
 
-    // Granting notifications is a real dialog, so the card is re-read when it closes.
+    // Granting notifications is a real dialog, so the row is re-read when it closes.
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { viewModel.refreshPermissions() }
@@ -126,6 +140,9 @@ private fun SettingsContent(
     onOpenTerms: () -> Unit,
     onOpenOnboarding: () -> Unit,
 ) {
+    var confirmClear by remember { mutableStateOf(false) }
+    val colors = MaterialTheme.spideyColors
+
     Column(Modifier.fillMaxSize()) {
         TabTitle(title = stringResource(R.string.settings_title))
 
@@ -133,172 +150,182 @@ private fun SettingsContent(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = SpideySpacing.screenGutter)
-                .padding(bottom = SpideySpacing.lg),
-            verticalArrangement = Arrangement.spacedBy(SpideySpacing.md),
+                .padding(bottom = SpideySpacing.xl),
         ) {
-            OnDeviceModelCard(
+            ProfileHeader(versionName = versionName)
+
+            OnDeviceModelSection(
                 needleStatus = ModelStatus.NotDownloaded,
                 whistleStatus = ModelStatus.NotDownloaded,
             )
 
-            SectionHeader(title = "Agent permissions", modifier = Modifier.padding(top = SpideySpacing.xs))
-            PermissionCard(
+            SectionLabel(text = "Permissions")
+            PermissionRow(
                 title = "Accessibility",
-                body = "Required so the agent can see and control the screen. You can stop it any time.",
-                granted = state.permissions.accessibilityReady,
-                warning = if (state.accessibilityStuck) {
-                    "Accessibility is switched on but the service has not connected, even " +
-                        "after waiting. Turn it off and on again in system settings."
+                subtitle = if (state.accessibilityStuck) {
+                    "On but not connected. Turn it off and on again."
                 } else {
-                    null
+                    "See and control the screen"
                 },
-                actionLabel = stringResource(R.string.onboarding_enable),
-                onAction = onEnableAccessibility,
+                on = state.permissions.accessibilityReady,
+                warning = state.accessibilityStuck,
+                icon = { IconBadge(icon = Icons.Outlined.Accessibility) },
+                onClick = onEnableAccessibility,
             )
-            // Two genuinely different things, and conflating them is what made this card claim
-            // notifications were off while they were on. "Notifications" is the POST_NOTIFICATIONS
-            // runtime permission - it is what lets the agent's progress be seen at all.
-            // "Notification access" is a separate system switch that lets the agent *read* other
-            // apps' notifications, and is optional.
-            PermissionCard(
+            RowDivider(inset = true)
+            PermissionRow(
                 title = "Notifications",
-                body = "Lets Spidey show its progress while it works. Without it you will not see " +
-                    "the agent's status once it leaves this app.",
-                granted = state.permissions.notificationsGranted,
-                actionLabel = "Enable notifications",
-                onAction = onEnableNotifications,
+                subtitle = "Show progress while a task runs",
+                on = state.permissions.notificationsGranted,
+                icon = { IconBadge(icon = Icons.Outlined.Notifications) },
+                onClick = onEnableNotifications,
             )
-            PermissionCard(
+            RowDivider(inset = true)
+            PermissionRow(
                 title = "Notification access",
-                body = "Optional, and separate from notifications above. Lets Spidey read your " +
-                    "notifications when a task asks it to. Everything else works without it.",
-                granted = state.permissions.notificationListenerEnabled,
-                actionLabel = "Open notification access",
-                onAction = onOpenNotificationAccess,
+                subtitle = "Optional. Read notifications when a task asks",
+                on = state.permissions.notificationListenerEnabled,
+                icon = { IconBadge(icon = Icons.Outlined.Visibility) },
+                onClick = onOpenNotificationAccess,
+            )
+            RowDivider(inset = true)
+            PermissionRow(
+                title = "Show over other apps",
+                subtitle = "A small status pill while the agent works elsewhere",
+                on = state.overlayAllowed,
+                icon = { IconBadge(icon = Icons.Outlined.Layers) },
+                onClick = onGrantOverlay,
             )
 
-            SectionHeader(
-                title = stringResource(R.string.settings_appearance),
-                modifier = Modifier.padding(top = SpideySpacing.xs),
-            )
-            ChipRow(
-                labels = AppearanceMode.entries.map { it.name },
-                selected = state.appearance.name,
-                onSelect = { name -> onSelectAppearance(AppearanceMode.fromKey(name)) },
-                contentPadding = PaddingValues(0.dp),
+            SectionLabel(text = stringResource(R.string.settings_appearance))
+            SegmentedControl(
+                options = AppearanceMode.entries.map { it.name },
+                selectedIndex = state.appearance.ordinal,
+                onSelect = { index -> onSelectAppearance(AppearanceMode.entries[index]) },
+                modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter, vertical = SpideySpacing.xs),
             )
 
-            SectionHeader(title = "Safety", modifier = Modifier.padding(top = SpideySpacing.xs))
-            SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                SwitchRow(
-                    title = "Stop when I touch the screen",
-                    description = "Touching the screen while a task is running stops it. Turn this " +
-                        "off if the agent stops when you did not mean it to.",
-                    checked = state.touchToStop,
-                    onCheckedChange = onTouchToStopChange,
-                )
-            }
-            SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = "Show status over other apps",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = if (state.overlayAllowed) {
-                                "A small pill shows what the agent is doing while you are in " +
-                                    "another app."
-                            } else {
-                                "Needs \"Display over other apps\". Without it you cannot see the " +
-                                    "agent's status once it leaves this app."
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.spideyColors.textSecondary,
-                        )
-                    }
-                    if (!state.overlayAllowed) {
-                        SecondaryButton(text = "Grant", onClick = onGrantOverlay)
-                    }
-                }
-            }
-
-            SectionHeader(title = "Memory", modifier = Modifier.padding(top = SpideySpacing.xs))
-            SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                SwitchRow(
-                    title = "Remember preferences",
-                    description = "Lets Spidey learn app shortcuts it can reuse. Stored only on this device.",
-                    checked = state.memoryEnabled,
-                    onCheckedChange = onMemoryChange,
-                )
-                SecondaryButton(
-                    text = "Manage memory",
-                    onClick = onOpenMemory,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = SpideySpacing.md),
-                )
-            }
-
-            SectionHeader(
-                title = stringResource(R.string.settings_privacy),
-                modifier = Modifier.padding(top = SpideySpacing.xs),
+            SectionLabel(text = "Behaviour")
+            SwitchRow(
+                title = "Stop when I touch the screen",
+                subtitle = "Touching the screen during a task stops it.",
+                checked = state.touchToStop,
+                onCheckedChange = onTouchToStopChange,
+                icon = Icons.Outlined.TouchApp,
             )
-            SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Screens are summarised into a small list of elements before the model " +
-                        "sees them; raw screen data and credentials are never logged.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.spideyColors.textSecondary,
-                )
-                SecondaryButton(
-                    text = "Clear task history",
-                    onClick = onClearHistory,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = SpideySpacing.md),
-                )
-            }
-
-            SectionHeader(title = "Legal", modifier = Modifier.padding(top = SpideySpacing.xs))
-            ClickableSpideyCard(onClick = onOpenTerms, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Terms of Service",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "Liability, acceptable use and your responsibilities.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.spideyColors.textSecondary,
-                )
-            }
-
-            SectionHeader(
-                title = stringResource(R.string.settings_about),
-                modifier = Modifier.padding(top = SpideySpacing.xs),
+            RowDivider(inset = true)
+            SwitchRow(
+                title = "Remember preferences",
+                subtitle = "Learn app shortcuts. Stored only on this device.",
+                checked = state.memoryEnabled,
+                onCheckedChange = onMemoryChange,
+                icon = Icons.Outlined.Memory,
             )
-            SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Spidey $versionName — an agent that acts through Android's official APIs.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.spideyColors.textSecondary,
-                )
-                SecondaryButton(
-                    text = "How permissions are used",
-                    onClick = onOpenOnboarding,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = SpideySpacing.md),
-                )
-            }
+            RowDivider(inset = true)
+            ListRow(
+                title = "Manage memory",
+                leading = { IconBadge(icon = Icons.Outlined.Folder) },
+                trailing = { Chevron() },
+                onClick = onOpenMemory,
+            )
+
+            SectionLabel(text = stringResource(R.string.settings_privacy))
+            ListRow(
+                title = "Clear task history",
+                subtitle = "Screens are summarised before the model sees them. Raw screen data is never logged.",
+                titleColor = colors.error,
+                leading = { IconBadge(icon = Icons.Outlined.Delete, tint = colors.error) },
+                onClick = { confirmClear = true },
+            )
+
+            SectionLabel(text = stringResource(R.string.settings_about))
+            ListRow(
+                title = "Terms of Service",
+                leading = { IconBadge(icon = Icons.Outlined.Description) },
+                trailing = { Chevron() },
+                onClick = onOpenTerms,
+            )
+            RowDivider(inset = true)
+            ListRow(
+                title = "How permissions are used",
+                leading = { IconBadge(icon = Icons.Outlined.Info) },
+                trailing = { Chevron() },
+                onClick = onOpenOnboarding,
+            )
+        }
+    }
+
+    if (confirmClear) {
+        ConfirmDialog(
+            title = "Clear task history?",
+            message = "Every task in your history will be removed. Saved routines stay.",
+            confirmLabel = "Clear",
+            onConfirm = {
+                confirmClear = false
+                onClearHistory()
+            },
+            onDismiss = { confirmClear = false },
+        )
+    }
+}
+
+@Composable
+private fun ProfileHeader(versionName: String) {
+    Row(
+        modifier = Modifier.padding(
+            horizontal = SpideySpacing.screenGutter,
+            vertical = SpideySpacing.md,
+        ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RingAvatar(text = "S", size = 64.dp)
+        Column(modifier = Modifier.padding(start = SpideySpacing.md)) {
+            Text(
+                text = "Spidey",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = "Version $versionName",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.spideyColors.textSecondary,
+            )
         }
     }
 }
 
-@Preview(name = "Settings", showBackground = true, widthDp = 360, heightDp = 1400)
+/** A permission as a row: what it does, whether it is on, and a chevron to change it. */
+@Composable
+private fun PermissionRow(
+    title: String,
+    subtitle: String,
+    on: Boolean,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit,
+    warning: Boolean = false,
+) {
+    val colors = MaterialTheme.spideyColors
+    val statusColor: Color = if (on) colors.success else colors.textSecondary
+    ListRow(
+        title = title,
+        subtitle = subtitle,
+        subtitleColor = if (warning) colors.error else colors.textSecondary,
+        leading = icon,
+        onClick = onClick,
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (on) "On" else "Off",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = statusColor,
+                )
+                Chevron()
+            }
+        },
+    )
+}
+
+@Preview(name = "Settings", showBackground = true, widthDp = 360, heightDp = 1500)
 @Composable
 private fun SettingsPreview() {
     SpideyTheme {

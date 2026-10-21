@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Accessibility
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,19 +20,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.example.agent.R
 import com.example.agent.core.permissions.PermissionUtils
-import com.example.agent.ui.components.HeroCard
+import com.example.agent.ui.components.IconBadge
+import com.example.agent.ui.components.ListRow
 import com.example.agent.ui.components.PrimaryButton
+import com.example.agent.ui.components.RowDivider
 import com.example.agent.ui.components.SecondaryButton
-import com.example.agent.ui.components.SpideyCard
+import com.example.agent.ui.components.SectionLabel
+import com.example.agent.ui.components.SpideyMark
 import com.example.agent.ui.components.StatusPill
 import com.example.agent.ui.components.StickyActionBar
 import com.example.agent.ui.theme.SpideySpacing
@@ -41,7 +47,7 @@ import com.example.agent.ui.theme.spideyColors
  * what it cannot do, and leaves the final switch to the user in system settings.
  *
  * Both grants happen *outside* the app, so the state is re-read on resume and the
- * enable button disappears once the permission is already on.
+ * enable action disappears once the permission is already on.
  */
 @Composable
 fun OnboardingScreen(onDone: () -> Unit) {
@@ -79,91 +85,75 @@ private fun OnboardingContent(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = SpideySpacing.screenGutter)
-                .padding(top = SpideySpacing.md, bottom = SpideySpacing.lg),
-            verticalArrangement = Arrangement.spacedBy(SpideySpacing.md),
+                .padding(bottom = SpideySpacing.lg),
         ) {
-            HeroCard(
-                title = stringResource(R.string.onboarding_title),
-                body = stringResource(R.string.onboarding_body),
+            Column(
+                modifier = Modifier.padding(
+                    start = SpideySpacing.screenGutter,
+                    end = SpideySpacing.screenGutter,
+                    top = SpideySpacing.xl,
+                ),
+                verticalArrangement = Arrangement.spacedBy(SpideySpacing.sm),
+            ) {
+                SpideyMark(color = MaterialTheme.colorScheme.primary, size = 48.dp)
+                Spacer(Modifier.height(SpideySpacing.xs))
+                Text(
+                    text = stringResource(R.string.onboarding_title),
+                    style = MaterialTheme.typography.displayMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = stringResource(R.string.onboarding_body),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.spideyColors.textSecondary,
+                )
+            }
+
+            SectionLabel(text = "What it can do")
+            Text(
+                text = "Open apps, read on-screen elements, tap, type, scroll, go back, and follow links, " +
+                    "only through the tools you can see in this app.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter),
             )
 
-            SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "What the agent can do",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(SpideySpacing.xxs))
-                Text(
-                    text = "Open apps, read on-screen elements, tap, type, scroll, go back, and follow links — " +
-                        "only through the tools you can see in this app.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.spideyColors.textSecondary,
-                )
-                Spacer(Modifier.height(SpideySpacing.md))
-                Text(
-                    text = "What it cannot do",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(SpideySpacing.xxs))
-                Text(
-                    text = "It cannot run code or shell commands, read arbitrary files, or bypass Android's security. " +
-                        "Sensitive actions such as sending, paying or deleting always wait for your approval.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.spideyColors.textSecondary,
-                )
-            }
+            SectionLabel(text = "What it cannot do")
+            Text(
+                text = "It cannot run code or shell commands, read arbitrary files, or bypass Android's security. " +
+                    "Sensitive actions such as sending, paying or deleting always wait for your approval.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter),
+            )
 
-            // ---- Accessibility (required) ----
-            SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                PermissionHeader(title = "Accessibility", granted = accessibilityReady, required = true)
-                Spacer(Modifier.height(SpideySpacing.xs))
-                Text(
-                    text = "Required so the agent can see and control the screen. You can stop it any time.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.spideyColors.textSecondary,
-                )
-                if (!accessibilityReady) {
-                    Spacer(Modifier.height(SpideySpacing.md))
-                    PrimaryButton(
-                        text = stringResource(R.string.onboarding_enable),
-                        onClick = onEnableAccessibility,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-
-            // ---- Notification access (optional) ----
-            SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                PermissionHeader(
-                    title = "Notification access",
-                    granted = notificationAccessEnabled,
-                    required = false,
-                )
-                Spacer(Modifier.height(SpideySpacing.xs))
-                Text(
-                    text = "Optional. Lets Spidey read your notifications when a task needs them, and show its " +
-                        "progress while it works. Everything else works without it.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.spideyColors.textSecondary,
-                )
-                if (!notificationAccessEnabled) {
-                    Spacer(Modifier.height(SpideySpacing.md))
-                    SecondaryButton(
-                        text = "Enable notification access",
-                        onClick = onEnableNotificationAccess,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
+            SectionLabel(text = "Permissions")
+            PermissionStep(
+                title = "Accessibility",
+                subtitle = "Required. See and control the screen. You can stop it any time.",
+                enabled = accessibilityReady,
+                icon = { IconBadge(icon = Icons.Outlined.Accessibility) },
+                onClick = onEnableAccessibility,
+            )
+            RowDivider(inset = true)
+            PermissionStep(
+                title = "Notification access",
+                subtitle = "Optional. Read notifications when a task needs them.",
+                enabled = notificationAccessEnabled,
+                icon = { IconBadge(icon = Icons.Outlined.Visibility) },
+                onClick = onEnableNotificationAccess,
+            )
         }
 
         StickyActionBar {
             if (accessibilityReady) {
                 PrimaryButton(text = "Done", onClick = onDone, modifier = Modifier.fillMaxWidth())
             } else {
+                PrimaryButton(
+                    text = stringResource(R.string.onboarding_enable),
+                    onClick = onEnableAccessibility,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 SecondaryButton(text = "Maybe later", onClick = onDone, modifier = Modifier.fillMaxWidth())
             }
         }
@@ -171,25 +161,28 @@ private fun OnboardingContent(
 }
 
 @Composable
-private fun PermissionHeader(title: String, granted: Boolean, required: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = if (required) "Required" else "Optional",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.spideyColors.textSecondary,
-            )
-        }
-        StatusPill(
-            label = if (granted) "Enabled" else "Not enabled",
-            color = if (granted) MaterialTheme.spideyColors.success else MaterialTheme.spideyColors.warning,
-        )
-    }
+private fun PermissionStep(
+    title: String,
+    subtitle: String,
+    enabled: Boolean,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.spideyColors
+    ListRow(
+        title = title,
+        subtitle = subtitle,
+        leading = icon,
+        onClick = if (enabled) null else onClick,
+        trailing = {
+            Row {
+                StatusPill(
+                    label = if (enabled) "Enabled" else "Not enabled",
+                    color = if (enabled) colors.success else colors.warning,
+                )
+            }
+        },
+    )
 }
 
 @Preview(name = "Onboarding", showBackground = true, widthDp = 360, heightDp = 900)

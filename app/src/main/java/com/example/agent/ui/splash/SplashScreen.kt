@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,9 +27,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.agent.ui.components.SpideyMark
 import com.example.agent.ui.theme.Inter
 import com.example.agent.ui.theme.LocalMotionEnabled
-import com.example.agent.ui.theme.PillShape
 import com.example.agent.ui.theme.SpideyBlue
 import com.example.agent.ui.theme.SpideyTheme
 import kotlinx.coroutines.delay
@@ -90,34 +89,29 @@ private fun SplashContent(alpha: Float, scale: Float, ruleWidth: Float) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
+            // The web draws itself in as the splash opens.
+            SpideyMark(color = Color.White, size = 96.dp, progress = ruleWidth)
+
+            Spacer(Modifier.height(20.dp))
+
             Text(
                 text = "spidey",
                 fontFamily = Inter,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 64.sp,
-                letterSpacing = (-1.5).sp,
+                fontSize = 40.sp,
+                letterSpacing = (-1).sp,
                 color = Color.White,
                 textAlign = TextAlign.Center,
             )
 
-            Spacer(Modifier.height(12.dp))
-
-            // A white pill rule that draws itself in beneath the wordmark.
-            Box(
-                Modifier
-                    .width((96 * ruleWidth).dp)
-                    .height(4.dp)
-                    .background(Color.White, PillShape),
-            )
-
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(6.dp))
 
             Text(
                 text = "your on-device agent",
                 fontFamily = Inter,
                 fontWeight = FontWeight.Medium,
                 fontSize = 15.sp,
-                color = Color.White.copy(alpha = 0.85f),
+                color = Color.White.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
             )
         }

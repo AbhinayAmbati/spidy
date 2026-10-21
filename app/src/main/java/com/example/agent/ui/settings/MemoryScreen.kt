@@ -1,8 +1,6 @@
 package com.example.agent.ui.settings
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,20 +11,23 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.agent.domain.model.MemoryEntry
+import com.example.agent.ui.components.ConfirmDialog
 import com.example.agent.ui.components.EmptyState
+import com.example.agent.ui.components.ListRow
+import com.example.agent.ui.components.RowDivider
 import com.example.agent.ui.components.ScreenTopBar
 import com.example.agent.ui.components.SecondaryButton
-import com.example.agent.ui.components.SectionHeader
-import com.example.agent.ui.components.SpideyCard
+import com.example.agent.ui.components.SectionLabel
 import com.example.agent.ui.components.StickyActionBar
 import com.example.agent.ui.components.SwitchRow
 import com.example.agent.ui.preview.PreviewData
@@ -65,6 +66,8 @@ private fun MemoryContent(
     onForget: (String) -> Unit,
     onClearAll: () -> Unit,
 ) {
+    var confirmClear by remember { mutableStateOf(false) }
+
     Column(Modifier.fillMaxSize()) {
         ScreenTopBar(title = "Memory", onBack = onBack)
 
@@ -72,32 +75,39 @@ private fun MemoryContent(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = SpideySpacing.screenGutter)
                 .padding(bottom = SpideySpacing.lg),
-            verticalArrangement = Arrangement.spacedBy(SpideySpacing.md),
         ) {
-            SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                SwitchRow(
-                    title = "Remember preferences",
-                    description = "When off, Spidey stops learning new app shortcuts. Existing entries stay until you delete them.",
-                    checked = enabled,
-                    onCheckedChange = onEnabledChange,
-                )
-            }
-
-            SectionHeader(
-                title = "Learned shortcuts",
-                subtitle = "App names Spidey can resolve next time.",
-                modifier = Modifier.fillMaxWidth(),
+            SwitchRow(
+                title = "Remember preferences",
+                subtitle = "When off, Spidey stops learning new app shortcuts. Existing entries stay until you delete them.",
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
             )
+
+            SectionLabel(text = "Learned shortcuts")
 
             if (entries.isEmpty()) {
                 EmptyState(
                     title = "Nothing remembered yet",
                     body = "Run a task that opens an app and the shortcut will appear here.",
                 )
-            } else {
-                entries.forEach { entry -> MemoryRow(entry = entry, onForget = { onForget(entry.key) }) }
+            }
+
+            entries.forEachIndexed { index, entry ->
+                if (index > 0) RowDivider()
+                ListRow(
+                    title = entry.key,
+                    subtitle = entry.value,
+                    trailing = {
+                        IconButton(onClick = { onForget(entry.key) }) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Forget ${entry.key}",
+                                tint = MaterialTheme.spideyColors.textSecondary,
+                            )
+                        }
+                    },
+                )
             }
         }
 
@@ -105,38 +115,25 @@ private fun MemoryContent(
             StickyActionBar {
                 SecondaryButton(
                     text = "Clear all memory",
-                    onClick = onClearAll,
+                    onClick = { confirmClear = true },
+                    contentColor = MaterialTheme.spideyColors.error,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
     }
-}
 
-@Composable
-private fun MemoryRow(entry: MemoryEntry, onForget: () -> Unit) {
-    SpideyCard(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = entry.key,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = entry.value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.spideyColors.textSecondary,
-                )
-            }
-            IconButton(onClick = onForget) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Forget ${entry.key}",
-                    tint = MaterialTheme.spideyColors.textSecondary,
-                )
-            }
-        }
+    if (confirmClear) {
+        ConfirmDialog(
+            title = "Clear all memory?",
+            message = "Spidey will forget every app shortcut it has learned.",
+            confirmLabel = "Clear",
+            onConfirm = {
+                confirmClear = false
+                onClearAll()
+            },
+            onDismiss = { confirmClear = false },
+        )
     }
 }
 
