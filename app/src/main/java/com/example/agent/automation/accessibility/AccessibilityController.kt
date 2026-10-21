@@ -160,19 +160,25 @@ class AccessibilityController {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
 
-        if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
-            return@withContext ActionResult.Ok
-        }
+        // A node from an earlier snapshot can go stale once the window changes, and touching it
+        // throws IllegalStateException. That must not take down the task, as it does not in click.
+        try {
+            if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+                return@withContext ActionResult.Ok
+            }
 
-        // SET_TEXT is refused outright by a field that does not hold focus - the search boxes in
-        // several apps do exactly this, which is why a real run failed to type on its first
-        // attempt and succeeded on the second. Focus it, then fill it.
-        focusAndMaybeClick(node)
-        delay(120)
-        if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
-            ActionResult.Ok
-        } else {
-            ActionResult.Unsupported
+            // SET_TEXT is refused outright by a field that does not hold focus - the search boxes
+            // in several apps do exactly this, which is why a real run failed to type on its first
+            // attempt and succeeded on the second. Focus it, then fill it.
+            focusAndMaybeClick(node)
+            delay(120)
+            if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+                ActionResult.Ok
+            } else {
+                ActionResult.Unsupported
+            }
+        } catch (stale: IllegalStateException) {
+            ActionResult.NotFound
         }
     }
 

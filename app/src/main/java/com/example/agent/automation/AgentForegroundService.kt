@@ -18,6 +18,7 @@ import com.example.agent.domain.model.TaskState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -37,6 +38,7 @@ class AgentForegroundService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var overlay: AgentStatusOverlay? = null
+    private var progressJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -51,9 +53,12 @@ class AgentForegroundService : Service() {
 
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Working…"))
+        // A second start must not stack another overlay and collector on the first.
+        progressJob?.cancel()
+        overlay?.hide()
         overlay = AgentStatusOverlay(this)
 
-        scope.launch {
+        progressJob = scope.launch {
             runtime.progress.collectLatest { progress ->
                 val status = AgentStatusText.line(progress)
 
