@@ -19,3 +19,6 @@ app/release
 keystore.properties
 *.jks
 release.keystore
+
+# Cactus Needle engine, fetched by tools/fetch_needle_engine.py
+app/src/main/cpp/engine/

@@ -24,6 +24,17 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    // On-device inference (Cactus Needle). The native bridge is only built once the engine has
+    // been fetched with tools/fetch_needle_engine.py; without it the app builds as before and
+    // the on-device provider reports itself unavailable.
+    if (file("src/main/cpp/engine/libneedle.a").exists()) {
+        defaultConfig {
+            ndk { abiFilters += "arm64-v8a" }
+            externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_shared" } }
+        }
+        externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
+    }
+
     // Release signing is read from keystore.properties, which is git-ignored and
     // never committed. With no such file, release builds fall back to the debug key
     // so the project always builds out of the box. Never hard-code a secret here.
