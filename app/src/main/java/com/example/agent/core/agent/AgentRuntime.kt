@@ -1,20 +1,10 @@
 package com.example.agent.core.agent
 
-import android.os.SystemClock
-import android.view.accessibility.AccessibilityEvent
-import com.example.agent.automation.AndroidAutomationManager
-import com.example.agent.automation.accessibility.AccessibilityBridge
-import com.example.agent.automation.accessibility.UserTouchGate
-import com.example.agent.automation.observer.ScreenObserver
 import com.example.agent.automation.tools.ToolRegistry
 import com.example.agent.core.ai.AIProvider
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.control.AgentHalt
 import com.example.agent.core.ai.AIProviderException
-import com.example.agent.core.ai.AIProviderFactory
-import com.example.agent.data.preferences.SettingsRepository
-import com.example.agent.data.repository.MemoryRepository
-import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.ActionTarget
 import com.example.agent.domain.model.AwaitingKind
 import com.example.agent.domain.model.AgentAction
@@ -55,14 +45,12 @@ import kotlin.coroutines.coroutineContext
  * then a registered tool.
  */
 class AgentRuntime(
-    private val providerFactory: AIProviderFactory,
-    private val settings: SettingsRepository,
+    private val models: ModelSource,
     private val registry: ToolRegistry,
     private val validator: ActionValidator,
-    private val observer: ScreenObserver,
-    private val automation: AndroidAutomationManager,
-    private val history: TaskHistoryRepository,
-    private val memory: MemoryRepository,
+    private val screen: AgentScreen,
+    private val journal: TaskJournal,
+    private val clock: AgentClock,
     private val scope: CoroutineScope,
 ) {
 
@@ -88,48 +76,18 @@ class AgentRuntime(
 
     val isRunning: Boolean get() = job?.isActive == true
 
-    @Volatile
-    private var touchToStopEnabled: Boolean = true
-
     private var taskStartedAtMillis: Long = 0L
+
+    /** When the current task began, on the clock the touch gate compares against. */
+    val startedAtMillis: Long get() = taskStartedAtMillis
 
     /** Actions of the most recent completed task, so it can be saved as a routine. */
     @Volatile
     private var lastRecordedActions: List<AgentAction> = emptyList()
 
-    init {
-        // Kept hot so the touch handler never has to hit DataStore on a touch.
-        scope.launch {
-            settings.touchToStop.collect { touchToStopEnabled = it }
-        }
-
-        // Touch-to-stop. If the user puts a finger on the screen while the agent is
-        // working, they have taken over, so the task stops.
-        //
-        // Every reason *not* to stop lives in UserTouchGate: disabled by the user, the
-        // agent waiting on an answer, and the opening seconds of a task during which the
-        // tap that started it is still being delivered.
-        scope.launch {
-            AccessibilityBridge.userTouches.collect { eventTimeMillis ->
-                if (!isRunning) return@collect
-                val stop = UserTouchGate.shouldStopForUserTouch(
-                    // The platform's own constant, not a mirrored number.
-                    eventType = AccessibilityEvent.TYPE_TOUCH_INTERACTION_START,
-                    // When the touch happened, not when the event reached us.
-                    eventTimeMillis = eventTimeMillis,
-                    suppressUntilMillis = AccessibilityBridge.suppressUntilMillis(),
-                    taskStartedAtMillis = taskStartedAtMillis,
-                    enabled = touchToStopEnabled,
-                    awaitingUser = _progress.value.awaitingKind != AwaitingKind.None,
-                )
-                if (stop) stop(STOPPED_BY_TOUCH)
-            }
-        }
-    }
-
     fun start(prompt: String) {
         if (isRunning) return
-        taskStartedAtMillis = SystemClock.uptimeMillis()
+        taskStartedAtMillis = clock.uptimeMillis()
         AgentHalt.clear()
         job = scope.launch { runTask(prompt, routine = null) }
     }
@@ -144,7 +102,7 @@ class AgentRuntime(
      */
     fun startRoutine(routine: Routine) {
         if (isRunning) return
-        taskStartedAtMillis = SystemClock.uptimeMillis()
+        taskStartedAtMillis = clock.uptimeMillis()
         AgentHalt.clear()
         job = scope.launch { runTask(routine.prompt, routine = routine) }
     }
@@ -204,7 +162,7 @@ class AgentRuntime(
     // ------------------------------------------------------------------ the loop
 
     private suspend fun runTask(prompt: String, routine: Routine?) {
-        val startedAt = System.currentTimeMillis()
+        val startedAt = clock.currentTimeMillis()
         val taskId = UUID.randomUUID().toString()
         val appsUsed = linkedSetOf<String>()
         val steps = mutableListOf<TaskStep>()
@@ -221,19 +179,19 @@ class AgentRuntime(
             message = "Understanding your request…",
         )
 
-        if (!automation.isAccessibilityReady()) {
+        if (!screen.isReady()) {
             finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
                 "Accessibility access is off, so I can't see or control the screen. Enable it in Settings.")
             return
         }
 
-        val knownApps = runCatching { memory.snapshot() }.getOrDefault(emptyList())
+        val knownApps = journal.knownApps()
 
         // Created on demand: a replay needs no model at all, and therefore no key.
         var provider: AIProvider? = null
         suspend fun ensureProvider(): AIProvider {
             provider?.let { return it }
-            return providerFactory.create(settings.currentProviderConfig()).also { provider = it }
+            return models.provider().also { provider = it }
         }
 
         // Replay until a step does not match, then hand over to the model from that point.
@@ -286,7 +244,7 @@ class AgentRuntime(
             if (conversationStarted) return
             conversationStarted = true
             messages += AgentMessage(MessageRole.System, PromptBuilder.systemPrompt(knownApps))
-            val opening = observer.observe()
+            val opening = screen.observe()
             opening.snapshot.packageName?.let { appsUsed.add(it) }
             messages += AgentMessage(
                 MessageRole.User,
@@ -377,7 +335,7 @@ class AgentRuntime(
                     calls = listOf(AgentActionCall(null, decoded))
                     replayIndex++
                 } else {
-                    val modelStartedAt = SystemClock.uptimeMillis()
+                    val modelStartedAt = clock.uptimeMillis()
                     beginConversation()
                     val generated = try {
                         ensureProvider().generateResponse(messages, registry.specs())
@@ -389,7 +347,7 @@ class AgentRuntime(
                         finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED, friendly(e))
                         return
                     }
-                    modelMillis = SystemClock.uptimeMillis() - modelStartedAt
+                    modelMillis = clock.uptimeMillis() - modelStartedAt
                     response = generated
                     calls = generated.calls
                 }
@@ -547,18 +505,18 @@ class AgentRuntime(
                     val nonMutating = action.action in NON_MUTATING_TOOLS
 
                     suspend fun observeAfterAction(): AfterAction {
-                        val settleStartedAt = SystemClock.uptimeMillis()
-                        val changed = automation.awaitUiSettled()
-                        val settleMillis = SystemClock.uptimeMillis() - settleStartedAt
+                        val settleStartedAt = clock.uptimeMillis()
+                        val changed = screen.awaitSettled()
+                        val settleMillis = clock.uptimeMillis() - settleStartedAt
 
                         if (!changed) {
                             consecutiveUnchanged++
                             return AfterAction(UNCHANGED_NOTE, settleMillis, 0)
                         }
 
-                        val observeStartedAt = SystemClock.uptimeMillis()
-                        val next = observer.observe()
-                        val observeMillis = SystemClock.uptimeMillis() - observeStartedAt
+                        val observeStartedAt = clock.uptimeMillis()
+                        val next = screen.observe()
+                        val observeMillis = clock.uptimeMillis() - observeStartedAt
                         next.snapshot.packageName?.let { appsUsed.add(it) }
 
                         val rendered = next.rendered
@@ -694,9 +652,9 @@ class AgentRuntime(
                 // Last gate before anything touches the device.
                 if (AgentHalt.isStopped) throw kotlinx.coroutines.CancellationException("Stopped by the user")
 
-                val actionStartedAt = SystemClock.uptimeMillis()
+                val actionStartedAt = clock.uptimeMillis()
                 val result = tool.execute(action)
-                val actionMillis = SystemClock.uptimeMillis() - actionStartedAt
+                val actionMillis = clock.uptimeMillis() - actionStartedAt
                 stepCount++
 
                 when (result) {
@@ -884,7 +842,7 @@ class AgentRuntime(
         state: TaskState,
         message: String,
     ) {
-        val finishedAt = System.currentTimeMillis()
+        val finishedAt = clock.currentTimeMillis()
         _paused.value = false
         _progress.value = _progress.value.copy(
             state = state,
@@ -894,18 +852,14 @@ class AgentRuntime(
         )
 
         // Learn app shortcuts from this task, if the user allows remembering.
-        runCatching {
-            memory.rememberApps(
-                appsUsed.mapNotNull { pkg -> automation.appLabel(pkg)?.let { it to pkg } }
-            )
-        }
+        journal.learnApps(appsUsed)
 
         // Every step already carries its own metrics, so the totals need no plumbing.
         val inputTokens = steps.sumOf { it.metrics?.inputTokens ?: 0 }
         val outputTokens = steps.sumOf { it.metrics?.outputTokens ?: 0 }
         val modelMillis = steps.sumOf { it.metrics?.modelMillis ?: 0 }
 
-        history.record(
+        journal.record(
             TaskRecord(
                 id = taskId,
                 prompt = prompt,
@@ -996,9 +950,6 @@ class AgentRuntime(
 
     private companion object {
         const val STOPPED_BY_USER = "Stopped by you."
-
-        /** Shown when touch-to-stop fires. */
-        const val STOPPED_BY_TOUCH = "Stopped: you touched the screen."
 
         /** How many times we push the model back towards calling a tool before giving up. */
         /**

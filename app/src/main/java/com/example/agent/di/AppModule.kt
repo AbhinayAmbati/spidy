@@ -24,6 +24,11 @@ import com.example.agent.automation.tools.TypeTextTool
 import com.example.agent.automation.tools.WaitTool
 import com.example.agent.core.agent.ActionValidator
 import com.example.agent.core.agent.AgentRuntime
+import com.example.agent.core.agent.ConfiguredModelSource
+import com.example.agent.core.agent.DeviceClock
+import com.example.agent.core.agent.DeviceScreen
+import com.example.agent.core.agent.StoredTaskJournal
+import com.example.agent.core.agent.TouchToStopWatcher
 import com.example.agent.core.ai.AIProviderFactory
 import com.example.agent.core.security.SecureCredentialStore
 import com.example.agent.data.local.AgentDatabase
@@ -152,14 +157,12 @@ object AppModule {
         memory: MemoryRepository,
         @ApplicationScope scope: CoroutineScope,
     ): AgentRuntime = AgentRuntime(
-        providerFactory = providerFactory,
-        settings = settings,
+        models = ConfiguredModelSource(providerFactory, settings),
         registry = registry,
         validator = validator,
-        observer = observer,
-        automation = automation,
-        history = history,
-        memory = memory,
+        screen = DeviceScreen(automation, observer),
+        journal = StoredTaskJournal(history, memory, automation),
+        clock = DeviceClock,
         scope = scope,
-    )
+    ).also { runtime -> TouchToStopWatcher(settings).watch(runtime, scope) }
 }
