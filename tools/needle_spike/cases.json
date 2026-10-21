@@ -1,0 +1,30 @@
+{
+  "_note": "group A: a plain request, no screen. group B: the input NeedlePrompt builds - task, results so far, then a screen listing. expect: calls in order; 'has' substrings (case-insensitive) must all appear in the call's arguments.",
+  "cases": [
+    {"id": "A01", "group": "A", "prompt": "Open YouTube", "expect": [{"name": "open_app", "has": ["youtube"]}]},
+    {"id": "A02", "group": "A", "prompt": "Open the Settings app", "expect": [{"name": "open_app", "has": ["settings"]}]},
+    {"id": "A03", "group": "A", "prompt": "Go back", "expect": [{"name": "press_back", "has": []}]},
+    {"id": "A04", "group": "A", "prompt": "Take me to the home screen", "expect": [{"name": "press_home", "has": []}]},
+    {"id": "A05", "group": "A", "prompt": "Scroll down", "expect": [{"name": "scroll", "has": ["forward"]}]},
+    {"id": "A06", "group": "A", "prompt": "Scroll back up", "expect": [{"name": "scroll", "has": ["backward"]}]},
+    {"id": "A07", "group": "A", "prompt": "Go to https://example.com", "expect": [{"name": "launch_url", "has": ["example.com"]}]},
+    {"id": "A08", "group": "A", "prompt": "Read my notifications", "expect": [{"name": "get_notifications", "has": []}]},
+    {"id": "A09", "group": "A", "prompt": "What is on the screen right now?", "expect": [{"name": "read_screen", "has": []}]},
+    {"id": "A10", "group": "A", "prompt": "Type hello world", "expect": [{"name": "type_text", "has": ["hello world"]}]},
+    {"id": "A11", "group": "A", "prompt": "Open WhatsApp and then go home", "expect": [{"name": "open_app", "has": ["whatsapp"]}, {"name": "press_home", "has": []}]},
+    {"id": "A12", "group": "A", "prompt": "Open Chrome and go to https://news.ycombinator.com", "expect": [{"name": "open_app", "has": ["chrome"]}, {"name": "launch_url", "has": ["ycombinator"]}]},
+    {"id": "A13", "group": "A", "prompt": "Wait three seconds", "expect": [{"name": "wait", "has": ["3000"]}]},
+    {"id": "A14", "group": "A", "prompt": "The task is complete, I am done", "expect": [{"name": "finish", "has": []}]},
+
+    {"id": "B01", "group": "B", "prompt": "Task: search for lofi music\nScreen:\n[k1] \"Search YouTube\" <EditText> (editable)\n[k2] \"Home\" <TextView> (clickable)\n[k3] \"Shorts\" <TextView> (clickable)\n[k4] \"Subscriptions\" <TextView> (clickable)", "expect": [{"name": "click", "has": ["search"]}]},
+    {"id": "B02", "group": "B", "prompt": "Task: open the Wi-Fi settings\nScreen:\n[k1] \"Network & internet\" <TextView> (clickable)\n[k2] \"Connected devices\" <TextView> (clickable)\n[k3] \"Apps\" <TextView> (clickable)\n[k4] \"Battery\" <TextView> (clickable)", "expect": [{"name": "click", "has": ["network"]}]},
+    {"id": "B03", "group": "B", "prompt": "Task: turn on dark mode\nScreen:\n[k1] \"Display\" <TextView> (clickable)\n[k2] \"Sound\" <TextView> (clickable)\n[k3] \"Storage\" <TextView> (clickable)", "expect": [{"name": "click", "has": ["display"]}]},
+    {"id": "B04", "group": "B", "prompt": "Task: send the message to Priya\nScreen:\n[k1] \"Message\" <EditText> (editable)\n[k2] \"Send\" <ImageButton> (clickable)\n[k3] \"Attach\" <ImageButton> (clickable)", "expect": [{"name": "click", "has": ["send"]}]},
+    {"id": "B05", "group": "B", "prompt": "Task: search for lofi music\nDone so far:\n- click {\"target\":{\"text\":\"Search YouTube\"}} -> Observation:\nScreen:\n[k1] \"Search YouTube\" <EditText> (editable, focused)\n[k2] \"Cancel\" <TextView> (clickable)", "expect": [{"name": "type_text", "has": ["lofi"]}]},
+    {"id": "B06", "group": "B", "prompt": "Task: open the second video\nScreen:\n[k1] \"Lofi Girl - beats to relax\" <TextView> (clickable)\n[k2] \"Chill Study Mix\" <TextView> (clickable)\n[k3] \"Jazz Cafe\" <TextView> (clickable)", "expect": [{"name": "click", "has": ["chill"]}]},
+    {"id": "B07", "group": "B", "prompt": "Task: find the Bluetooth option\nScreen:\n[k1] \"Wi-Fi\" <TextView> (clickable)\n[k2] \"Mobile network\" <TextView> (clickable)\n[k3] \"Hotspot\" <TextView> (clickable)", "expect": [{"name": "scroll", "has": ["forward"]}]},
+    {"id": "B08", "group": "B", "prompt": "Task: open the camera\nScreen:\n[k1] \"Phone\" <TextView> (clickable)\n[k2] \"Messages\" <TextView> (clickable)\n[k3] \"Camera\" <TextView> (clickable)\n[k4] \"Chrome\" <TextView> (clickable)", "expect": [{"name": "click", "has": ["camera"]}]},
+    {"id": "B09", "group": "B", "prompt": "Task: open the camera\nDone so far:\n- click {\"target\":{\"text\":\"Camera\"}} -> Observation:\nScreen:\n[k1] \"Shutter\" <ImageButton> (clickable)\n[k2] \"Switch camera\" <ImageButton> (clickable)\n[k3] \"Video\" <TextView> (clickable)", "expect": [{"name": "finish", "has": []}]},
+    {"id": "B10", "group": "B", "prompt": "Task: reply yes to the last message\nScreen:\n[k1] \"Type a message\" <EditText> (editable)\n[k2] \"Mic\" <ImageButton> (clickable)\n[k3] \"Do you want to meet at 6?\" <TextView>", "expect": [{"name": "type_text", "has": ["yes"]}]}
+  ]
+}
