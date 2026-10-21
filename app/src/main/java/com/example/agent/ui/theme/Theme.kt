@@ -51,7 +51,7 @@ private val LightScheme = lightColorScheme(
 
     surface = LightSurface,
     onSurface = LightText,
-    surfaceVariant = Color(0xFFEEF0F7),
+    surfaceVariant = LightMuted,
     onSurfaceVariant = LightTextSecondary,
     surfaceTint = SpideyBlue,
     inverseSurface = SpideyInk,
@@ -62,8 +62,8 @@ private val LightScheme = lightColorScheme(
     surfaceDim = Color(0xFFE3E6EF),
     surfaceContainerLowest = Color.White,
     surfaceContainerLow = Color(0xFFFAFBFE),
-    surfaceContainer = Color.White,
-    surfaceContainerHigh = Color(0xFFF1F3F9),
+    surfaceContainer = LightMuted,
+    surfaceContainerHigh = Color(0xFFEDF0F7),
     surfaceContainerHighest = Color(0xFFEBEEF6),
 
     outline = LightBorder,
@@ -98,7 +98,7 @@ private val DarkScheme = darkColorScheme(
 
     surface = DarkSurface,
     onSurface = DarkText,
-    surfaceVariant = Color(0xFF1D2540),
+    surfaceVariant = DarkMuted,
     onSurfaceVariant = DarkTextSecondary,
     surfaceTint = SpideyBlueLight,
     inverseSurface = Color(0xFFF1F3FA),
@@ -109,7 +109,7 @@ private val DarkScheme = darkColorScheme(
     surfaceDim = DarkBackground,
     surfaceContainerLowest = Color(0xFF080C19),
     surfaceContainerLow = Color(0xFF111729),
-    surfaceContainer = DarkSurface,
+    surfaceContainer = DarkMuted,
     surfaceContainerHigh = Color(0xFF1B2238),
     surfaceContainerHighest = Color(0xFF232B45),
 

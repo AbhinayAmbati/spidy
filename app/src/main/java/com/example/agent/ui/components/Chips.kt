@@ -1,6 +1,6 @@
 package com.example.agent.ui.components
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
@@ -10,13 +10,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.agent.ui.theme.PillShape
 import com.example.agent.ui.theme.SpideySpacing
 import com.example.agent.ui.theme.spideyColors
 
-/** A pill that is solid blue when selected and outlined white otherwise. */
+/** A pill that fades to solid ink when selected and sits on a muted fill otherwise. */
 @Composable
 fun SpideyChip(
     label: String,
@@ -25,33 +26,34 @@ fun SpideyChip(
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.spideyColors
+    val tick = rememberTick()
+    val container by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onBackground else colors.muted,
+        label = "chipContainer",
+    )
+    val content by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onBackground,
+        label = "chipContent",
+    )
     Surface(
-        onClick = onClick,
+        onClick = {
+            if (!selected) tick()
+            onClick()
+        },
         modifier = modifier,
         shape = PillShape,
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-        contentColor = if (selected) {
-            MaterialTheme.colorScheme.onPrimary
-        } else {
-            MaterialTheme.colorScheme.onBackground
-        },
-        border = BorderStroke(
-            1.dp,
-            if (selected) MaterialTheme.colorScheme.primary else colors.border,
-        ),
+        color = container,
+        contentColor = content,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
         )
     }
 }
 
-/**
- * A horizontally scrolling row of chips. Pass a null [selected] for rows whose chips are
- * plain suggestions rather than a filter.
- */
+/** A horizontally scrolling row of chips acting as a single-choice filter. */
 @Composable
 fun ChipRow(
     labels: List<String>,

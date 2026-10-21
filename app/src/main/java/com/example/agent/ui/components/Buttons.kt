@@ -1,20 +1,20 @@
 package com.example.agent.ui.components
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.agent.ui.theme.PillShape
-import com.example.agent.ui.theme.SpideyInk
 import com.example.agent.ui.theme.SpideySpacing
 import com.example.agent.ui.theme.spideyColors
 
@@ -28,16 +28,20 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    val source = remember { MutableInteractionSource() }
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.defaultMinSize(minHeight = SpideySpacing.controlHeight),
+        interactionSource = source,
+        modifier = modifier
+            .defaultMinSize(minHeight = SpideySpacing.controlHeight)
+            .pressScale(source),
         shape = PillShape,
         contentPadding = ButtonPadding,
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
-            disabledContainerColor = MaterialTheme.spideyColors.border,
+            disabledContainerColor = MaterialTheme.spideyColors.muted,
             disabledContentColor = MaterialTheme.spideyColors.textSecondary,
         ),
     ) {
@@ -45,24 +49,29 @@ fun PrimaryButton(
     }
 }
 
-/** A white pill with a blue outline, for the second action beside a [PrimaryButton]. */
+/** A quiet tonal pill for the second action beside a [PrimaryButton]. */
 @Composable
 fun SecondaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    contentColor: Color = MaterialTheme.colorScheme.onBackground,
 ) {
-    val blue = MaterialTheme.colorScheme.primary
-    OutlinedButton(
+    val source = remember { MutableInteractionSource() }
+    Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.defaultMinSize(minHeight = SpideySpacing.controlHeight),
+        interactionSource = source,
+        modifier = modifier
+            .defaultMinSize(minHeight = SpideySpacing.controlHeight)
+            .pressScale(source),
         shape = PillShape,
         contentPadding = ButtonPadding,
-        border = BorderStroke(2.dp, if (enabled) blue else MaterialTheme.spideyColors.border),
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = blue,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.spideyColors.muted,
+            contentColor = contentColor,
+            disabledContainerColor = MaterialTheme.spideyColors.muted,
             disabledContentColor = MaterialTheme.spideyColors.textSecondary,
         ),
     ) {
@@ -70,26 +79,16 @@ fun SecondaryButton(
     }
 }
 
-/** The black "SHOP NOW" style pill used on hero banners. */
+/** A text-only action, for low-emphasis choices such as "See all". */
 @Composable
-fun DarkPillButton(
+fun TextAction(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true,
+    color: Color = MaterialTheme.colorScheme.primary,
 ) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.defaultMinSize(minHeight = 44.dp),
-        shape = PillShape,
-        contentPadding = ButtonPadding,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = SpideyInk,
-            contentColor = Color.White,
-        ),
-    ) {
-        ButtonLabel(text)
+    TextButton(onClick = onClick, modifier = modifier) {
+        Text(text = text, style = MaterialTheme.typography.labelLarge, color = color)
     }
 }
 

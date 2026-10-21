@@ -16,9 +16,6 @@ val SpideyShapes = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
-/** Hero banners and the biggest cards. */
-val HeroShape = RoundedCornerShape(24.dp)
-
 /** Buttons, chips, status pills. */
 val PillShape = RoundedCornerShape(percent = 50)
 

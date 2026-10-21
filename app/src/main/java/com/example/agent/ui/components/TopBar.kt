@@ -1,148 +1,135 @@
 package com.example.agent.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.agent.ui.theme.SpideySpacing
 import com.example.agent.ui.theme.spideyColors
 
-/** The header for every screen reached from another one: a round back button and a bold title. */
+private val BarHeight = 56.dp
+
+/**
+ * The header for every screen reached from another one: a plain back arrow on the left,
+ * a centred title, a hairline underneath. [trailing] holds up to one or two icon buttons.
+ */
 @Composable
 fun ScreenTopBar(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(BarHeight)
+                .padding(horizontal = SpideySpacing.xxs),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(SpideySpacing.minTouchTarget)
+                    .pressClickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 64.dp),
+            )
+            if (trailing != null) {
+                Row(
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = trailing,
+                )
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.spideyColors.border)
+    }
+}
+
+/** The title of a top-level tab: left-aligned, no back arrow, room for trailing actions. */
+@Composable
+fun TabTitle(
+    title: String,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = SpideySpacing.screenGutter,
-                vertical = SpideySpacing.sm,
-            ),
+            .height(BarHeight)
+            .padding(start = SpideySpacing.screenGutter, end = SpideySpacing.xxs),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Box(
-            modifier = Modifier
-                .size(SpideySpacing.minTouchTarget)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface)
-                .clickable(role = Role.Button, onClick = onBack),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onBackground,
-            )
-        }
-        Spacer(Modifier.width(SpideySpacing.sm))
         Text(
             text = title,
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
         )
+        if (trailing != null) {
+            Row(verticalAlignment = Alignment.CenterVertically, content = trailing)
+        }
     }
 }
 
-/** The title row for a top-level tab, without a back button. */
+/** The Home header: the Spidey mark and wordmark on the left, like Instagram's logo bar. */
 @Composable
-fun TabTitle(title: String, modifier: Modifier = Modifier) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.headlineMedium,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = SpideySpacing.screenGutter,
-                vertical = SpideySpacing.md,
-            ),
-    )
-}
-
-/**
- * The Home header, laid out like Instamart's location row: a blue icon tile, a bold blue
- * title with a grey line under it, and a round profile button on the right.
- */
-@Composable
-fun HomeHeader(
-    title: String,
-    subtitle: String,
-    onProfileClick: () -> Unit,
+fun HomeTopBar(
     modifier: Modifier = Modifier,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = SpideySpacing.screenGutter,
-                vertical = SpideySpacing.sm,
-            ),
+            .height(BarHeight)
+            .padding(start = SpideySpacing.screenGutter, end = SpideySpacing.xxs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Bolt,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary,
-            )
-        }
-        Spacer(Modifier.width(SpideySpacing.sm))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.spideyColors.textSecondary,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF3D4152))
-                .clickable(role = Role.Button, onClick = onProfileClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Person,
-                contentDescription = "Settings",
-                tint = Color.White,
-            )
+        SpideyMark(color = MaterialTheme.colorScheme.primary, size = 28.dp)
+        Spacer(Modifier.width(SpideySpacing.xs))
+        Text(
+            text = "spidey",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f),
+        )
+        if (trailing != null) {
+            Row(verticalAlignment = Alignment.CenterVertically, content = trailing)
         }
     }
 }

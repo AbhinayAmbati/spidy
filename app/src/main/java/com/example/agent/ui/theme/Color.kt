@@ -15,15 +15,17 @@ val SpideyBlueTint = Color(0xFFE8EEFF)
 val SpideyBlueLight = Color(0xFF5C8DFF)
 
 // Light theme
-val LightBackground = Color(0xFFF4F6FB)
+val LightBackground = Color(0xFFFFFFFF)
 val LightSurface = Color(0xFFFFFFFF)
+val LightMuted = Color(0xFFF3F5FA)
 val LightText = Color(0xFF282C3F)
 val LightTextSecondary = Color(0xFF6B7080)
 val LightBorder = Color(0xFFE3E6EF)
 
 // Dark theme
 val DarkBackground = Color(0xFF0B1020)
-val DarkSurface = Color(0xFF151B2E)
+val DarkSurface = Color(0xFF0B1020)
+val DarkMuted = Color(0xFF171E33)
 val DarkText = Color(0xFFF1F3FA)
 val DarkTextSecondary = Color(0xFFA2A8BC)
 val DarkBorder = Color(0xFF262D45)
@@ -47,6 +49,7 @@ val SpideyInk = Color(0xFF02060C)
 data class SpideyColors(
     val textSecondary: Color,
     val border: Color,
+    val muted: Color,
     val blue: Color,
     val blueDeep: Color,
     val blueTint: Color,
@@ -58,6 +61,7 @@ data class SpideyColors(
 val LightSpideyColors = SpideyColors(
     textSecondary = LightTextSecondary,
     border = LightBorder,
+    muted = LightMuted,
     blue = SpideyBlue,
     blueDeep = SpideyBlueDeep,
     blueTint = SpideyBlueTint,
@@ -69,6 +73,7 @@ val LightSpideyColors = SpideyColors(
 val DarkSpideyColors = SpideyColors(
     textSecondary = DarkTextSecondary,
     border = DarkBorder,
+    muted = DarkMuted,
     blue = SpideyBlueLight,
     blueDeep = SpideyBlue,
     blueTint = Color(0xFF1B2A55),
