@@ -173,9 +173,7 @@ class ContextCompactorTest {
 
         val compacted = ContextCompactor.compact(messages)
 
-        assertThat(compacted.map { it.content }).contains("Observation:
-SCREEN_1")
-        assertThat(compacted.map { it.content }).contains("Observation:
-SCREEN_2")
+        assertThat(compacted.map { it.content }).contains("Observation:\nSCREEN_1")
+        assertThat(compacted.map { it.content }).contains("Observation:\nSCREEN_2")
     }
 }
