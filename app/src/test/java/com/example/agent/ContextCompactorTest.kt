@@ -160,4 +160,22 @@ class ContextCompactorTest {
             assertThat(compacted.size).isAtMost(ContextCompactor.MAX_MESSAGES)
         }
     }
+
+    @Test
+    fun `an unchanged-screen note does not push a real listing out`() {
+        val unchanged = AgentMessage(
+            MessageRole.Tool,
+            "The screen is unchanged, so the listing above is still current.",
+            toolCallId = "call_9",
+            name = "click",
+        )
+        val messages = conversation(2) + call(9) + unchanged
+
+        val compacted = ContextCompactor.compact(messages)
+
+        assertThat(compacted.map { it.content }).contains("Observation:
+SCREEN_1")
+        assertThat(compacted.map { it.content }).contains("Observation:
+SCREEN_2")
+    }
 }

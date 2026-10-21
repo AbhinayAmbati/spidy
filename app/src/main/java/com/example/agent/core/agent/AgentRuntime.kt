@@ -762,14 +762,14 @@ class AgentRuntime(
                     }
                 }
                 }
-            }
-
-            finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
-                "I reached the ${TaskProgress.MAX_AGENT_STEPS}-step limit without finishing. You can refine the request and try again.")
 
                 // A batch that stopped early leaves calls with no result, which providers reject.
                 messages += SkippedCalls.resultsFor(messages, callRefs)
                 trim(messages)
+            }
+
+            finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
+                "I reached the ${TaskProgress.MAX_AGENT_STEPS}-step limit without finishing. You can refine the request and try again.")
         } catch (e: AIProviderException) {
             finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED, friendly(e))
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -1060,7 +1060,9 @@ class AgentRuntime(
          * and says nothing new.
          */
         const val UNCHANGED_NOTE =
-            "Observation: the screen is unchanged, so the listing above is still current. " +
+            // No "Observation:" prefix: ContextCompactor counts that as a screen listing and
+            // would evict a real one to make room for this note.
+            "The screen is unchanged, so the listing above is still current. " +
                 "Repeating that action will not help - do something different, or call " +
                 "finish if the task is already done."
 
