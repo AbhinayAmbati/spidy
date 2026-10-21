@@ -126,7 +126,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideValidator(registry: ToolRegistry): ActionValidator = ActionValidator(registry)
+    fun provideValidator(registry: ToolRegistry, observer: ScreenObserver): ActionValidator =
+        ActionValidator(registry, observer::labelForKey)
 
     @Provides
     @Singleton

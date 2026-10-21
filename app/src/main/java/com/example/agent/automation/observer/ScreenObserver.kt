@@ -12,8 +12,18 @@ import com.example.agent.domain.model.ScreenSnapshot
  */
 class ScreenObserver(private val automation: AndroidAutomationManager) {
 
+    @Volatile
+    private var lastSnapshot: ScreenSnapshot = ScreenSnapshot.EMPTY
+
+    /** The visible label of the element a key referred to in the most recent observation. */
+    fun labelForKey(key: String): String? =
+        lastSnapshot.elements.firstOrNull { it.key == key }?.let { element ->
+            listOfNotNull(element.text, element.contentDescription).joinToString(" ").ifBlank { null }
+        }
+
     suspend fun observe(): Observation {
         val snapshot = automation.readScreen()
+        lastSnapshot = snapshot
         return Observation(snapshot, render(snapshot))
     }
 

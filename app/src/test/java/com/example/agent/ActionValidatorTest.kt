@@ -58,6 +58,27 @@ class ActionValidatorTest {
     }
 
     @Test
+    fun `a tap targeted by key is checked against the label of the element it points at`() {
+        val tool = FakeTool(ToolNames.CLICK)
+        val validator = ActionValidator(ToolRegistry(listOf(tool)), labelForKey = { key -> if (key == "k1") "Pay now" else null })
+        val outcome = validator.validate(
+            AgentAction(action = ToolNames.CLICK, target = com.example.agent.domain.model.ActionTarget(key = "k1")),
+            0,
+        )
+        assertThat(outcome).isInstanceOf(ActionValidator.Outcome.RequiresConfirmation::class.java)
+    }
+
+    @Test
+    fun `a label that merely contains a sensitive word is not flagged`() {
+        val tool = FakeTool(ToolNames.CLICK)
+        val outcome = validator(tool).validate(
+            AgentAction(action = ToolNames.CLICK, target = com.example.agent.domain.model.ActionTarget(text = "Facebook")),
+            0,
+        )
+        assertThat(outcome).isEqualTo(ActionValidator.Outcome.Allowed)
+    }
+
+    @Test
     fun `rejects once the step limit is reached`() {
         val tool = FakeTool(ToolNames.CLICK)
         val outcome = validator(tool).validate(AgentAction(action = ToolNames.CLICK), stepIndex = 30)

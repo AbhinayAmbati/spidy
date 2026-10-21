@@ -12,7 +12,11 @@ import com.example.agent.domain.model.ToolNames
  * device. The model is treated as untrusted input: if it is not explicitly
  * allowed by a registered tool and its arguments, it does not run.
  */
-class ActionValidator(private val registry: ToolRegistry) {
+class ActionValidator(
+    private val registry: ToolRegistry,
+    /** Visible label of the on-screen element a `[key]` refers to, when it is still known. */
+    private val labelForKey: (String) -> String? = { null },
+) {
 
     sealed interface Outcome {
         data object Allowed : Outcome
@@ -53,18 +57,26 @@ class ActionValidator(private val registry: ToolRegistry) {
      */
     private fun sensitiveTargetReason(action: AgentAction): String? {
         if (action.action != ToolNames.CLICK && action.action != ToolNames.LONG_CLICK) return null
-        val label = listOfNotNull(action.target?.text, action.target?.contentDescription)
+        // A target given by key carries no label of its own, so the label of the element the
+        // key points at is what has to be checked.
+        val keyLabel = action.target?.key?.let(labelForKey)
+        val label = listOfNotNull(action.target?.text, action.target?.contentDescription, keyLabel)
             .joinToString(" ").lowercase()
         if (label.isBlank()) return null
-        val hit = SENSITIVE_WORDS.firstOrNull { label.contains(it) } ?: return null
+        val hit = SENSITIVE_PATTERNS.firstOrNull { it.second.containsMatchIn(label) }?.first
+            ?: return null
         return "Tapping \"$hit\" may be hard to undo."
     }
 
     private companion object {
-        val SENSITIVE_WORDS = listOf(
+        private val SENSITIVE_WORDS = listOf(
             "send", "pay", "payment", "buy", "purchase", "checkout", "order now", "place order",
             "delete", "remove account", "uninstall", "install", "transfer", "confirm", "submit",
             "call", "dial", "subscribe", "book", "erase", "format", "sign out", "log out",
         )
+
+        // Whole words only: a substring match flagged "Facebook" (book), "Display" (pay) and
+        // "Sender" (send).
+        val SENSITIVE_PATTERNS = SENSITIVE_WORDS.map { it to Regex("\\b${Regex.escape(it)}\\b") }
     }
 }
