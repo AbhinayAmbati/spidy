@@ -1,20 +1,10 @@
 package com.example.agent.core.agent
 
-import android.os.SystemClock
-import android.view.accessibility.AccessibilityEvent
-import com.example.agent.automation.AndroidAutomationManager
-import com.example.agent.automation.accessibility.AccessibilityBridge
-import com.example.agent.automation.accessibility.UserTouchGate
-import com.example.agent.automation.observer.ScreenObserver
 import com.example.agent.automation.tools.ToolRegistry
 import com.example.agent.core.ai.AIProvider
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.control.AgentHalt
 import com.example.agent.core.ai.AIProviderException
-import com.example.agent.core.ai.AIProviderFactory
-import com.example.agent.data.preferences.SettingsRepository
-import com.example.agent.data.repository.MemoryRepository
-import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.ActionTarget
 import com.example.agent.domain.model.AwaitingKind
 import com.example.agent.domain.model.AgentAction
@@ -55,14 +45,12 @@ import kotlin.coroutines.coroutineContext
  * then a registered tool.
  */
 class AgentRuntime(
-    private val providerFactory: AIProviderFactory,
-    private val settings: SettingsRepository,
+    private val models: ModelSource,
     private val registry: ToolRegistry,
     private val validator: ActionValidator,
-    private val observer: ScreenObserver,
-    private val automation: AndroidAutomationManager,
-    private val history: TaskHistoryRepository,
-    private val memory: MemoryRepository,
+    private val screen: AgentScreen,
+    private val journal: TaskJournal,
+    private val clock: AgentClock,
     private val scope: CoroutineScope,
 ) {
 
@@ -88,48 +76,18 @@ class AgentRuntime(
 
     val isRunning: Boolean get() = job?.isActive == true
 
-    @Volatile
-    private var touchToStopEnabled: Boolean = true
-
     private var taskStartedAtMillis: Long = 0L
+
+    /** When the current task began, on the clock the touch gate compares against. */
+    val startedAtMillis: Long get() = taskStartedAtMillis
 
     /** Actions of the most recent completed task, so it can be saved as a routine. */
     @Volatile
     private var lastRecordedActions: List<AgentAction> = emptyList()
 
-    init {
-        // Kept hot so the touch handler never has to hit DataStore on a touch.
-        scope.launch {
-            settings.touchToStop.collect { touchToStopEnabled = it }
-        }
-
-        // Touch-to-stop. If the user puts a finger on the screen while the agent is
-        // working, they have taken over, so the task stops.
-        //
-        // Every reason *not* to stop lives in UserTouchGate: disabled by the user, the
-        // agent waiting on an answer, and the opening seconds of a task during which the
-        // tap that started it is still being delivered.
-        scope.launch {
-            AccessibilityBridge.userTouches.collect { eventTimeMillis ->
-                if (!isRunning) return@collect
-                val stop = UserTouchGate.shouldStopForUserTouch(
-                    // The platform's own constant, not a mirrored number.
-                    eventType = AccessibilityEvent.TYPE_TOUCH_INTERACTION_START,
-                    // When the touch happened, not when the event reached us.
-                    eventTimeMillis = eventTimeMillis,
-                    suppressUntilMillis = AccessibilityBridge.suppressUntilMillis(),
-                    taskStartedAtMillis = taskStartedAtMillis,
-                    enabled = touchToStopEnabled,
-                    awaitingUser = _progress.value.awaitingKind != AwaitingKind.None,
-                )
-                if (stop) stop(STOPPED_BY_TOUCH)
-            }
-        }
-    }
-
     fun start(prompt: String) {
         if (isRunning) return
-        taskStartedAtMillis = SystemClock.uptimeMillis()
+        taskStartedAtMillis = clock.uptimeMillis()
         AgentHalt.clear()
         job = scope.launch { runTask(prompt, routine = null) }
     }
@@ -144,7 +102,7 @@ class AgentRuntime(
      */
     fun startRoutine(routine: Routine) {
         if (isRunning) return
-        taskStartedAtMillis = SystemClock.uptimeMillis()
+        taskStartedAtMillis = clock.uptimeMillis()
         AgentHalt.clear()
         job = scope.launch { runTask(routine.prompt, routine = routine) }
     }
@@ -204,7 +162,7 @@ class AgentRuntime(
     // ------------------------------------------------------------------ the loop
 
     private suspend fun runTask(prompt: String, routine: Routine?) {
-        val startedAt = System.currentTimeMillis()
+        val startedAt = clock.currentTimeMillis()
         val taskId = UUID.randomUUID().toString()
         val appsUsed = linkedSetOf<String>()
         val steps = mutableListOf<TaskStep>()
@@ -221,19 +179,19 @@ class AgentRuntime(
             message = "Understanding your request…",
         )
 
-        if (!automation.isAccessibilityReady()) {
+        if (!screen.isReady()) {
             finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
                 "Accessibility access is off, so I can't see or control the screen. Enable it in Settings.")
             return
         }
 
-        val knownApps = runCatching { memory.snapshot() }.getOrDefault(emptyList())
+        val knownApps = journal.knownApps()
 
         // Created on demand: a replay needs no model at all, and therefore no key.
         var provider: AIProvider? = null
         suspend fun ensureProvider(): AIProvider {
             provider?.let { return it }
-            return providerFactory.create(settings.currentProviderConfig()).also { provider = it }
+            return models.provider().also { provider = it }
         }
 
         // Replay until a step does not match, then hand over to the model from that point.
@@ -241,9 +199,7 @@ class AgentRuntime(
         var replaying = routine != null
 
         var nudges = 0
-        var stallRecoveries = 0
-        // How many times each exact action has run this task. See NEVER_REPEATED_TOOLS.
-        val signatureRuns = mutableMapOf<String, Int>()
+        val loopGuard = LoopGuard()
         // Everything tried this task, keyed by action signature, so the model can be shown
         // what it has already spent instead of being refused after the fact.
         val attempts = LinkedHashMap<String, Attempt>()
@@ -263,20 +219,6 @@ class AgentRuntime(
             attempts.values,
             registry.specs().map { it.name }.filterNot { it in toolsUsed },
         )
-        // Per-tool counts, which ignore the arguments. See ActionSignature.TOOL_CAPS.
-        val toolRuns = mutableMapOf<String, Int>()
-        // Loop protection. The most common failure is running the same action over and
-        // over — opening an app already on screen, or retyping text that is already there.
-        // The prompt forbids it, but that cannot be relied on.
-        var lastObservation: String? = null
-        val sigToObservation = mutableMapOf<String, String>()
-        val repeatRefusals = mutableMapOf<String, Int>()
-        // Broader no-progress signals. The exact-repeat guard only catches identical
-        // arguments; these catch an agent that keeps doing *something* without the screen
-        // ever changing, or that hammers one tool.
-        var consecutiveUnchanged = 0
-        var consecutiveSameTool = 0
-        var lastTool: String? = null
         val messages = mutableListOf<AgentMessage>()
         var conversationStarted = false
 
@@ -286,7 +228,7 @@ class AgentRuntime(
             if (conversationStarted) return
             conversationStarted = true
             messages += AgentMessage(MessageRole.System, PromptBuilder.systemPrompt(knownApps))
-            val opening = observer.observe()
+            val opening = screen.observe()
             opening.snapshot.packageName?.let { appsUsed.add(it) }
             messages += AgentMessage(
                 MessageRole.User,
@@ -298,14 +240,9 @@ class AgentRuntime(
             for (step in 0 until TaskProgress.MAX_AGENT_STEPS) {
                 if (AgentHalt.isStopped) throw kotlinx.coroutines.CancellationException("Stopped by the user")
 
-                // A stall used to end the task. That was the wrong call: nothing on screen
-                // changing does not mean the task is impossible, it means the agent has run
-                // out of ideas - and it had never been told what it had already spent. So it
-                // is told, and given a few goes at a different route before giving up.
-                if (consecutiveUnchanged >= MAX_STALLED_STEPS) {
-                    if (stallRecoveries < MAX_STALL_RECOVERIES) {
-                        stallRecoveries++
-                        consecutiveUnchanged = 0
+                when (val check = loopGuard.checkBeforeStep()) {
+                    LoopGuard.StepCheck.Proceed -> Unit
+                    LoopGuard.StepCheck.Redirect -> {
                         messages += AgentMessage(
                             MessageRole.User,
                             PromptBuilder.observationMessage(
@@ -323,23 +260,13 @@ class AgentRuntime(
                         trim(messages)
                         continue
                     }
-                    finish(
-                        taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
-                        "Nothing on screen changed for several steps and I had no untried route " +
-                            "left, so I stopped rather than keep repeating myself. Tell me the " +
-                            "exact element to use, or rephrase the task.",
-                    )
-                    return
-                }
-
-                if (consecutiveSameTool >= MAX_SAME_TOOL_STREAK) {
-                    finish(
-                        taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
-                        "I used ${lastTool ?: "the same tool"} $consecutiveSameTool times in a row " +
-                            "without finishing, so I stopped. That usually means the element I " +
-                            "need is not on screen - name it exactly, or rephrase the task.",
-                    )
-                    return
+                    is LoopGuard.StepCheck.GiveUp -> {
+                        finish(
+                            taskId, prompt, startedAt, stepCount, appsUsed, steps,
+                            TaskState.FAILED, check.summary,
+                        )
+                        return
+                    }
                 }
 
                 coroutineContext.ensureActive()
@@ -377,7 +304,7 @@ class AgentRuntime(
                     calls = listOf(AgentActionCall(null, decoded))
                     replayIndex++
                 } else {
-                    val modelStartedAt = SystemClock.uptimeMillis()
+                    val modelStartedAt = clock.uptimeMillis()
                     beginConversation()
                     val generated = try {
                         ensureProvider().generateResponse(messages, registry.specs())
@@ -389,7 +316,7 @@ class AgentRuntime(
                         finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED, friendly(e))
                         return
                     }
-                    modelMillis = SystemClock.uptimeMillis() - modelStartedAt
+                    modelMillis = clock.uptimeMillis() - modelStartedAt
                     response = generated
                     calls = generated.calls
                 }
@@ -428,7 +355,7 @@ class AgentRuntime(
                         // The screen goes with the nudge. Without it the model was told off
                         // for talking but given nothing to act on, so it talked again - which
                         // is exactly how the nudge loop used to exhaust itself.
-                        val screen = lastObservation?.takeIf { it.isNotBlank() }
+                        val currentScreen = loopGuard.lastObservation?.takeIf { it.isNotBlank() }
                         messages += AgentMessage(
                             MessageRole.User,
                             PromptBuilder.observationMessage(
@@ -438,10 +365,10 @@ class AgentRuntime(
                                             "Reply again, and this time call a tool.",
                                     )
                                     appendLine("Use finish when the task is complete.")
-                                    if (screen != null) {
+                                    if (currentScreen != null) {
                                         appendLine()
                                         appendLine("The screen right now:")
-                                        append(screen)
+                                        append(currentScreen)
                                     }
                                 },
                             ),
@@ -477,17 +404,7 @@ class AgentRuntime(
                     // local must be declared before it is used.
                     val sig = ActionSignature.of(action)
 
-                    // Streak of one tool in a row. Repeatable tools (scroll, wait, back) are
-                    // exempt, because using them several times in a row is legitimate.
-                    if (action.action in ActionSignature.REPEATABLE_TOOLS) {
-                        lastTool = null
-                        consecutiveSameTool = 0
-                    } else if (action.action == lastTool) {
-                        consecutiveSameTool++
-                    } else {
-                        lastTool = action.action
-                        consecutiveSameTool = 1
-                    }
+                    loopGuard.trackTool(action.action)
 
                     val label = describe(action)
                     val index = steps.size
@@ -528,6 +445,11 @@ class AgentRuntime(
                     // variables declared above it, and observeAfterAction needs this.
                     data class AfterAction(val text: String, val settleMillis: Long, val observeMillis: Long)
 
+                    // Read-only tools cannot change the screen, so there is nothing to wait for. A
+                    // real 21-second run spent 8.8 s in settle - 41% of the wall clock - and the
+                    // read-only steps paid the full quiet period for a screen they had just read.
+                    val nonMutating = action.action in NON_MUTATING_TOOLS
+
                     /**
                      * The one place that decides what the model is told about the screen after an
                      * action.
@@ -536,37 +458,23 @@ class AgentRuntime(
                      * model already has, so both the traversal and the listing are skipped — the
                      * single biggest per-step saving, and it applies to every no-op action.
                      */
-                    /**
-                     * Tools that cannot change the screen, so there is nothing to wait for.
-                     *
-                     * A real 21-second run spent 8.8 s in settle - 41% of the wall clock, more
-                     * than the model - and the read-only steps paid the full quiet period for a
-                     * screen they had just read. The tool already returns the observation, so
-                     * settling and re-reading it is pure cost.
-                     */
-                    val nonMutating = action.action in NON_MUTATING_TOOLS
-
                     suspend fun observeAfterAction(): AfterAction {
-                        val settleStartedAt = SystemClock.uptimeMillis()
-                        val changed = automation.awaitUiSettled()
-                        val settleMillis = SystemClock.uptimeMillis() - settleStartedAt
+                        val settleStartedAt = clock.uptimeMillis()
+                        val changed = screen.awaitSettled()
+                        val settleMillis = clock.uptimeMillis() - settleStartedAt
 
                         if (!changed) {
-                            consecutiveUnchanged++
+                            loopGuard.noteScreenUnchanged()
                             return AfterAction(UNCHANGED_NOTE, settleMillis, 0)
                         }
 
-                        val observeStartedAt = SystemClock.uptimeMillis()
-                        val next = observer.observe()
-                        val observeMillis = SystemClock.uptimeMillis() - observeStartedAt
+                        val observeStartedAt = clock.uptimeMillis()
+                        val next = screen.observe()
+                        val observeMillis = clock.uptimeMillis() - observeStartedAt
                         next.snapshot.packageName?.let { appsUsed.add(it) }
 
                         val rendered = next.rendered
-                        // A change event can still render identically (an animation, say).
-                        val same = rendered == lastObservation
-                        consecutiveUnchanged = if (same) consecutiveUnchanged + 1 else 0
-                        lastObservation = rendered
-                        sig?.let { sigToObservation[it] = rendered }
+                        val same = loopGuard.noteObservation(rendered, sig)
 
                         val text = if (same) UNCHANGED_NOTE else PromptBuilder.observationMessage(rendered)
                         return AfterAction(text, settleMillis, observeMillis)
@@ -581,85 +489,23 @@ class AgentRuntime(
                         outputTokens = response?.outputTokens ?: 0,
                     )
 
-                    // ---- identical-repeat guard ---------------------------------------
-                    // An action that has already run with exactly these arguments and got
-                    // nowhere must not run again. This is checked by signature rather than by
-                    // whether the screen changed, because the screen almost always *does*
-                    // change - and two runs that accomplished the same nothing still look
-                    // different to a snapshot.
-                    val identicalCap = when {
-                        sig == null -> null
-                        action.action in ActionSignature.NEVER_REPEATED_TOOLS -> MAX_IDENTICAL_RUNS
-                        else -> MAX_IDENTICAL_RUNS_GENERIC
-                    }
-                    if (sig != null && identicalCap != null) {
-                        val runs = (signatureRuns[sig] ?: 0) + 1
-                        signatureRuns[sig] = runs
-                        if (runs > identicalCap) {
-                            markStep(steps, index, StepStatus.Failed, "Already done — nothing gained")
+                    when (val check = loopGuard.checkCall(action, sig)) {
+                        LoopGuard.CallCheck.Allowed -> Unit
+                        is LoopGuard.CallCheck.Refused -> {
+                            markStep(steps, index, StepStatus.Failed, check.stepDetail)
                             recordAttempt(AttemptOutcome.Refused)
-                            recordResult(
-                                "\"${action.action}\" with exactly these arguments has already " +
-                                    "run and got you nowhere. Running it again will not help. " +
-                                    "Read the screen and pick a different element, or call " +
-                                    "finish if the task is already done.",
-                            )
+                            recordResult(check.toModel)
                             break
                         }
-                    }
-
-                    // The same tool, over and over, with the arguments changed each time. A
-                    // search that has already returned results is the case that matters: the
-                    // model rephrases the query and searches again, and the page it gets back
-                    // is the same page it already had.
-                    val toolCap = ActionSignature.TOOL_CAPS[action.action]
-                    if (toolCap != null) {
-                        val runs = (toolRuns[action.action] ?: 0) + 1
-                        toolRuns[action.action] = runs
-                        if (runs > toolCap) {
-                            markStep(steps, index, StepStatus.Failed, "Stuck repeating ${action.action}")
-                            recordAttempt(AttemptOutcome.Refused)
-                            recordResult(
-                                "You have now called ${action.action} $runs times in this task " +
-                                    "and the screen is no closer to the goal. Do NOT call it " +
-                                    "again. If search results are already showing, tap the one " +
-                                    "you want, or call finish if what the task asked for is " +
-                                    "already on screen.",
-                            )
-                            break
-                        }
-                    }
-
-                    // ---- repeat guard -------------------------------------------------
-                    // Refuse to re-run an action whose arguments are identical to one that
-                    // already ran and left the screen exactly as it is. If the model keeps
-                    // insisting, stop rather than spin.
-                    val previousObservation = sig?.let { sigToObservation[it] }
-                    if (sig != null && previousObservation != null && previousObservation == lastObservation) {
-                        val refusals = (repeatRefusals[sig] ?: 0) + 1
-                        repeatRefusals[sig] = refusals
-
-                        if (refusals >= MAX_REPEAT_REFUSALS) {
-                            markStep(steps, index, StepStatus.Failed, "Repeated with no progress")
+                        is LoopGuard.CallCheck.GiveUp -> {
+                            markStep(steps, index, StepStatus.Failed, check.stepDetail)
                             recordAttempt(AttemptOutcome.Refused)
                             finish(
-                                taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
-                                "I kept repeating the same action and the screen never changed, so I " +
-                                    "stopped instead of looping. Name the exact element you want tapped, " +
-                                    "or try rephrasing.",
+                                taskId, prompt, startedAt, stepCount, appsUsed, steps,
+                                TaskState.FAILED, check.summary,
                             )
                             return
                         }
-
-                        markStep(steps, index, StepStatus.Failed, "Already tried — nothing changed")
-                        recordAttempt(AttemptOutcome.Refused)
-                        recordResult(
-                            "You already ran this exact action and the screen has NOT changed. " +
-                                "Running it again will not help. Do something different now: " +
-                                "read_screen, scroll to reveal the element, choose a different " +
-                                "element, or call finish if the task is already done.",
-                        )
-                        break
                     }
 
                     when (val outcome = validator.validate(action, step)) {
@@ -694,9 +540,9 @@ class AgentRuntime(
                 // Last gate before anything touches the device.
                 if (AgentHalt.isStopped) throw kotlinx.coroutines.CancellationException("Stopped by the user")
 
-                val actionStartedAt = SystemClock.uptimeMillis()
+                val actionStartedAt = clock.uptimeMillis()
                 val result = tool.execute(action)
-                val actionMillis = SystemClock.uptimeMillis() - actionStartedAt
+                val actionMillis = clock.uptimeMillis() - actionStartedAt
                 stepCount++
 
                 when (result) {
@@ -884,7 +730,7 @@ class AgentRuntime(
         state: TaskState,
         message: String,
     ) {
-        val finishedAt = System.currentTimeMillis()
+        val finishedAt = clock.currentTimeMillis()
         _paused.value = false
         _progress.value = _progress.value.copy(
             state = state,
@@ -894,18 +740,14 @@ class AgentRuntime(
         )
 
         // Learn app shortcuts from this task, if the user allows remembering.
-        runCatching {
-            memory.rememberApps(
-                appsUsed.mapNotNull { pkg -> automation.appLabel(pkg)?.let { it to pkg } }
-            )
-        }
+        journal.learnApps(appsUsed)
 
         // Every step already carries its own metrics, so the totals need no plumbing.
         val inputTokens = steps.sumOf { it.metrics?.inputTokens ?: 0 }
         val outputTokens = steps.sumOf { it.metrics?.outputTokens ?: 0 }
         val modelMillis = steps.sumOf { it.metrics?.modelMillis ?: 0 }
 
-        history.record(
+        journal.record(
             TaskRecord(
                 id = taskId,
                 prompt = prompt,
@@ -997,10 +839,6 @@ class AgentRuntime(
     private companion object {
         const val STOPPED_BY_USER = "Stopped by you."
 
-        /** Shown when touch-to-stop fires. */
-        const val STOPPED_BY_TOUCH = "Stopped: you touched the screen."
-
-        /** How many times we push the model back towards calling a tool before giving up. */
         /**
          * How many times the model is asked again after replying with prose instead of a call.
          *
@@ -1011,15 +849,6 @@ class AgentRuntime(
          */
         const val MAX_TEXT_NUDGES = 4
 
-        /** How many times we refuse a repeat before ending the task instead of looping. */
-        const val MAX_REPEAT_REFUSALS = 3
-
-        /**
-         * How many times one exact action may run in a single task before it is refused.
-         *
-         * Two is enough for anything real: a third identical call has never been the thing
-         * that unblocked a task, and the screenshots that prompted this show five and six.
-         */
         /**
          * Tools that cannot change the screen.
          *
@@ -1031,32 +860,6 @@ class AgentRuntime(
             ToolNames.FIND_TEXT,
             ToolNames.GET_NOTIFICATIONS,
         )
-
-        const val MAX_IDENTICAL_RUNS = 2
-
-        /**
-         * The same cap for everything else that is not legitimately repeatable.
-         *
-         * Higher than [MAX_IDENTICAL_RUNS], because tapping the same "Next" button through a
-         * paginated list is a real task. Four taps is the point at which it has stopped being
-         * paging and started being a loop.
-         */
-        const val MAX_IDENTICAL_RUNS_GENERIC = 4
-
-        /** Consecutive steps with an unchanged screen before we stop for lack of progress. */
-        const val MAX_STALLED_STEPS = 4
-
-        /**
-         * How many times a stalled run is redirected before it is given up on.
-         *
-         * A stall means the agent has run out of ideas, not that the task is impossible, so it
-         * is told what it has already spent and given another go. Two redirections is enough
-         * to prove it is genuinely stuck rather than momentarily out of step.
-         */
-        const val MAX_STALL_RECOVERIES = 2
-
-        /** Consecutive uses of one tool before we stop - the agent is hammering it. */
-        const val MAX_SAME_TOOL_STREAK = 4
 
         /**
          * Sent instead of a full listing when an action left the screen exactly as it was.
