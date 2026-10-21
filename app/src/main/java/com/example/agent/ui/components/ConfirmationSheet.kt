@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.example.agent.ui.theme.SheetShape
 import com.example.agent.ui.theme.SpideySpacing
 import com.example.agent.ui.theme.spideyColors
 
@@ -37,24 +38,24 @@ fun ConfirmationSheet(
         onDismissRequest = onCancel,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = SheetShape,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = SpideySpacing.lg)
-                .padding(bottom = SpideySpacing.xl)
+                .padding(bottom = SpideySpacing.lg)
                 .navigationBarsPadding(),
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.spideyColors.textSecondary,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
             )
             Spacer(Modifier.height(SpideySpacing.xs))
             Text(
                 text = prompt,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (detail != null) {
@@ -65,10 +66,10 @@ fun ConfirmationSheet(
                     color = MaterialTheme.spideyColors.textSecondary,
                 )
             }
-            Spacer(Modifier.height(SpideySpacing.xl))
+            Spacer(Modifier.height(SpideySpacing.lg))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(SpideySpacing.md),
+                horizontalArrangement = Arrangement.spacedBy(SpideySpacing.sm),
             ) {
                 SecondaryButton(text = cancelLabel, onClick = onCancel, modifier = Modifier.weight(1f))
                 PrimaryButton(text = allowLabel, onClick = onAllow, modifier = Modifier.weight(1f))

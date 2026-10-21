@@ -1,114 +1,48 @@
 package com.example.agent.ui.components
 
-import androidx.annotation.DrawableRes
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import com.example.agent.domain.model.TaskState
 import com.example.agent.ui.theme.SpideySpacing
 import com.example.agent.ui.theme.spideyColors
 
+/** One task in a list: the request in bold, the app it used, and a coloured outcome pill. */
 @Composable
 fun TaskCard(
     prompt: String,
     appName: String?,
-    statusLabel: String,
+    state: TaskState,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    GlassCard(
-        modifier = modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(SpideySpacing.cardPadding),
-    ) {
+    ClickableSpideyCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
         Text(
             text = prompt,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(SpideySpacing.xxs))
+        Spacer(Modifier.height(SpideySpacing.xs))
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (appName != null) {
                 Text(
-                    text = appName,
-                    style = MaterialTheme.typography.labelSmall,
+                    text = appName.substringAfterLast('.'),
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.spideyColors.textSecondary,
                 )
             }
             Spacer(Modifier.weight(1f))
-            Text(
-                text = statusLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.spideyColors.brownAccent,
-            )
-        }
-    }
-}
-
-@Composable
-fun ProviderCard(
-    name: String,
-    @DrawableRes iconRes: Int,
-    subtitle: String?,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    GlassCard(
-        modifier = modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = onClick),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            horizontal = SpideySpacing.md, vertical = SpideySpacing.sm,
-        ),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = null,
-                tint = if (selected) MaterialTheme.spideyColors.brownAccent
-                else MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(Modifier.width(SpideySpacing.sm))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.spideyColors.textSecondary,
-                    )
-                }
-            }
-            RadioButton(
-                selected = selected,
-                onClick = onClick,
-                colors = androidx.compose.material3.RadioButtonDefaults.colors(
-                    selectedColor = MaterialTheme.spideyColors.brownAccent,
-                ),
-            )
+            StatusPill(label = taskStateLabel(state), color = taskStateColor(state))
         }
     }
 }
@@ -124,23 +58,18 @@ fun PermissionCard(
     /** Shown when [granted] is true but something still needs the user's attention. */
     warning: String? = null,
 ) {
-    GlassCard(modifier = modifier.fillMaxWidth()) {
+    SpideyCard(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
-            StatusDot(
-                color = if (granted) MaterialTheme.spideyColors.success else MaterialTheme.spideyColors.warning,
-                label = if (granted) "Granted" else "Not granted",
-            )
             Spacer(Modifier.width(SpideySpacing.xs))
-            Text(
-                text = if (granted) "Enabled" else "Not enabled",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (granted) MaterialTheme.spideyColors.success else MaterialTheme.spideyColors.textSecondary,
+            StatusPill(
+                label = if (granted) "Enabled" else "Not enabled",
+                color = if (granted) MaterialTheme.spideyColors.success else MaterialTheme.spideyColors.warning,
             )
         }
         Spacer(Modifier.height(SpideySpacing.xs))
