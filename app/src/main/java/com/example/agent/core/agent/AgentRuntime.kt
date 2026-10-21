@@ -40,6 +40,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.coroutines.coroutineContext
@@ -167,19 +168,19 @@ class AgentRuntime(
         pauseGate?.cancel()
         pauseGate = null
         _paused.value = false
-        _progress.value = _progress.value.copy(
-            state = TaskState.CANCELLED,
-            message = reason,
-            awaitingKind = AwaitingKind.None,
-        )
+        _progress.update {
+            it.copy(state = TaskState.CANCELLED, message = reason, awaitingKind = AwaitingKind.None)
+        }
     }
 
     /** Pauses between steps. Safe to call when nothing is running. */
     fun pause() {
         if (!isRunning || _paused.value) return
-        _paused.value = true
+        // The gate first: awaitResumeIfPaused reads the flag and then awaits the gate, so
+        // the other order let a pause slip through with no gate to wait on.
         pauseGate = CompletableDeferred()
-        _progress.value = _progress.value.copy(state = TaskState.PAUSED, message = "Paused.")
+        _paused.value = true
+        _progress.update { it.copy(state = TaskState.PAUSED, message = "Paused.") }
     }
 
     fun resume() {
@@ -187,7 +188,7 @@ class AgentRuntime(
         _paused.value = false
         pauseGate?.complete(Unit)
         pauseGate = null
-        _progress.value = _progress.value.copy(state = TaskState.EXECUTING, message = "Continuing…")
+        _progress.update { it.copy(state = TaskState.EXECUTING, message = "Continuing…") }
     }
 
     /** Called by the confirmation sheet. */
@@ -694,7 +695,6 @@ class AgentRuntime(
                 if (AgentHalt.isStopped) throw kotlinx.coroutines.CancellationException("Stopped by the user")
 
                 val actionStartedAt = SystemClock.uptimeMillis()
-                if (!replaying) actionsTaken += action
                 val result = tool.execute(action)
                 val actionMillis = SystemClock.uptimeMillis() - actionStartedAt
                 stepCount++
@@ -702,6 +702,10 @@ class AgentRuntime(
                 when (result) {
                     is ToolResult.Success -> {
                         markStep(steps, index, StepStatus.Done)
+                        // Recorded on success only, and for replayed steps too: a routine that
+                        // hands over to the model must keep the prefix that was replayed, and
+                        // an action that failed must not be replayed next time.
+                        actionsTaken += action
                         if (nonMutating) {
                             // The tool's own result already carries the screen, and nothing it
                             // did can have changed it.
