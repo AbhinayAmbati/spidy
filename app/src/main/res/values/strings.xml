@@ -4,36 +4,20 @@
     <string name="accessibility_service_label">Spidey Agent</string>
     <string name="accessibility_service_description">Spidey uses accessibility to see on-screen elements and perform the taps, typing and scrolling needed to complete tasks you ask for. You stay in control and can stop it any time.</string>
 
-    <!-- Home -->
-    <string name="home_greeting_morning">Good morning</string>
-    <string name="home_greeting_afternoon">Good afternoon</string>
-    <string name="home_greeting_evening">Good evening</string>
-    <string name="home_prompt">What should I do?</string>
-    <string name="home_input_hint">Ask your agent…</string>
-    <string name="home_recent_tasks">Recent tasks</string>
-
     <!-- Nav -->
     <string name="nav_home">Home</string>
     <string name="nav_tasks">Tasks</string>
+    <string name="nav_routines">Routines</string>
     <string name="nav_settings">Settings</string>
 
     <!-- Task -->
-    <string name="task_stop">Stop</string>
     <string name="task_retry">Try again</string>
-    <string name="task_step_of">Step %1$d of %2$d</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
-    <string name="settings_ai_provider">AI provider</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_privacy">Privacy</string>
     <string name="settings_about">About</string>
-
-    <!-- Provider -->
-    <string name="provider_title">AI provider</string>
-    <string name="provider_key_local_note">Your API key is encrypted on this device and is only ever sent to the provider you choose.</string>
-    <string name="provider_test">Test connection</string>
-    <string name="provider_save">Save</string>
 
     <!-- Confirmation -->
     <string name="confirm_title">The agent wants to</string>
