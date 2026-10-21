@@ -3,6 +3,8 @@ package com.example.agent.automation.tools
 import com.example.agent.automation.AndroidAutomationManager
 import com.example.agent.automation.accessibility.AccessibilityController.ActionResult
 import com.example.agent.automation.accessibility.TargetMatcher
+import com.example.agent.automation.observer.ScreenObserver
+import com.example.agent.core.agent.PromptBuilder
 import com.example.agent.core.ai.ValidationResult
 import com.example.agent.domain.model.ActionTarget
 import com.example.agent.domain.model.AgentAction
@@ -93,13 +95,15 @@ class CloseAppTool(private val automation: AndroidAutomationManager) : BaseTool(
  * every action anyway, so this used to take a whole snapshot whose result was then thrown
  * away and immediately replaced.
  */
-class ReadScreenTool : BaseTool() {
+class ReadScreenTool(private val observer: ScreenObserver) : BaseTool() {
     override val name = ToolNames.READ_SCREEN
     override val description = "Read the current screen and list its interactive elements."
     override val parametersSchema = ToolSchemas.READ_SCREEN
 
+    // The runtime skips its own post-action observation for read-only tools, so the listing
+    // has to come from here.
     override suspend fun execute(action: AgentAction): ToolResult =
-        ToolResult.Success("Reading the screen now - the current listing follows.")
+        ToolResult.Success(PromptBuilder.observationMessage(observer.observe().rendered))
 }
 
 class FindTextTool(private val automation: AndroidAutomationManager) : BaseTool() {
