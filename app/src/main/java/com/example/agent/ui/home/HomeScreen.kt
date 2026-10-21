@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,21 +27,23 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.agent.core.permissions.PermissionUtils
 import com.example.agent.domain.model.AppearanceMode
-import com.example.agent.domain.model.TaskProgress
+import com.example.agent.domain.model.Routine
 import com.example.agent.domain.model.TaskRecord
 import com.example.agent.domain.model.TaskState
-import com.example.agent.ui.components.AgentStatusCard
-import com.example.agent.ui.components.ChipRow
-import com.example.agent.ui.components.EmptyState
-import com.example.agent.ui.components.HeroCard
-import com.example.agent.ui.components.HomeHeader
-import com.example.agent.ui.components.PermissionCard
-import com.example.agent.ui.components.PromptBar
+import com.example.agent.ui.components.Composer
+import com.example.agent.ui.components.HomeTopBar
+import com.example.agent.ui.components.NoticeBanner
+import com.example.agent.ui.components.RoutineStories
 import com.example.agent.ui.components.SectionHeader
-import com.example.agent.ui.components.TaskCard
+import com.example.agent.ui.components.SpideyMark
+import com.example.agent.ui.components.SuggestionRow
+import com.example.agent.ui.components.TaskRow
+import com.example.agent.ui.components.taskSubtitle
 import com.example.agent.ui.preview.PreviewData
 import com.example.agent.ui.theme.SpideySpacing
 import com.example.agent.ui.theme.SpideyTheme
+import com.example.agent.ui.theme.spideyColors
+import androidx.compose.ui.unit.dp
 import java.time.LocalTime
 
 private val SUGGESTIONS = listOf(
@@ -58,13 +63,14 @@ fun HomeScreen(
     val context = LocalContext.current
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val recent by viewModel.recentTasks.collectAsStateWithLifecycle()
+    val routines by viewModel.routinesList.collectAsStateWithLifecycle()
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
     val accessibilityStuck by viewModel.accessibilityStuck.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshPermissions() }
 
-    // Jump to the live execution view the moment a task starts.
+    // Jump to the live conversation the moment a task starts.
     LaunchedEffect(progress.state) {
         if (progress.state.isWorking || progress.state == TaskState.WAITING_FOR_CONFIRMATION) {
             onOpenTask()
@@ -79,16 +85,15 @@ fun HomeScreen(
             viewModel.submit(input)
             input = ""
         },
-        progress = progress,
         recent = recent,
+        routines = routines,
         accessibilityReady = permissions.accessibilityReady,
         accessibilityStuck = accessibilityStuck,
         onEnableAccessibility = {
             context.startActivity(PermissionUtils.accessibilitySettingsIntent())
         },
-        onStop = viewModel::stop,
+        onRunRoutine = viewModel::runRoutine,
         onOpenHistory = onOpenHistory,
-        onOpenSettings = onOpenSettings,
     )
 }
 
@@ -98,106 +103,97 @@ private fun HomeContent(
     input: String,
     onInputChange: (String) -> Unit,
     onSubmit: () -> Unit,
-    progress: TaskProgress,
     recent: List<TaskRecord>,
+    routines: List<Routine>,
     accessibilityReady: Boolean,
     accessibilityStuck: Boolean,
     onEnableAccessibility: () -> Unit,
-    onStop: () -> Unit,
+    onRunRoutine: (Routine) -> Unit,
     onOpenHistory: () -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
-    val taskRunning = progress.state.isWorking ||
-        progress.state == TaskState.WAITING_FOR_CONFIRMATION
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
+        HomeTopBar()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = SpideySpacing.lg),
-    ) {
-        HomeHeader(
-            title = "Spidey",
-            subtitle = "$greeting · your on-device agent",
-            onProfileClick = onOpenSettings,
-        )
-
-        Spacer(Modifier.height(SpideySpacing.xs))
-
-        PromptBar(
-            value = input,
-            onValueChange = onInputChange,
-            onSubmit = onSubmit,
-            hint = "Try \"Open Settings\"",
-            modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter),
-        )
-
-        Spacer(Modifier.height(SpideySpacing.sm))
-
-        ChipRow(labels = SUGGESTIONS, selected = null, onSelect = onInputChange)
-
-        Spacer(Modifier.height(SpideySpacing.lg))
+        if (!accessibilityReady) {
+            NoticeBanner(
+                text = if (accessibilityStuck) {
+                    "Accessibility is on but not connected. Turn it off and on again."
+                } else {
+                    "Turn on accessibility so Spidey can control the screen."
+                },
+                actionLabel = "Enable",
+                onAction = onEnableAccessibility,
+                isError = accessibilityStuck,
+            )
+        }
 
         Column(
-            modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter),
-            verticalArrangement = Arrangement.spacedBy(SpideySpacing.md),
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(top = SpideySpacing.md, bottom = SpideySpacing.md),
+            verticalArrangement = Arrangement.spacedBy(SpideySpacing.lg),
         ) {
-            if (taskRunning) {
-                AgentStatusCard(
-                    state = progress.state,
-                    message = progress.message,
-                    step = progress.currentStep,
-                    total = progress.totalSteps,
-                    onStop = onStop,
+            if (routines.isNotEmpty()) {
+                RoutineStories(routines = routines, onRun = onRunRoutine)
+            }
+
+            Column(
+                modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter),
+                verticalArrangement = Arrangement.spacedBy(SpideySpacing.xs),
+            ) {
+                SpideyMark(color = MaterialTheme.colorScheme.primary, size = 44.dp)
+                Spacer(Modifier.height(SpideySpacing.xs))
+                Text(
+                    text = greeting,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.spideyColors.textSecondary,
                 )
-            } else {
-                HeroCard(
-                    title = "What should I do?",
-                    body = "Type or speak a request and Spidey does it across your apps.",
+                Text(
+                    text = "What should I do?",
+                    style = MaterialTheme.typography.displayMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
             }
 
-            if (!accessibilityReady) {
-                PermissionCard(
-                    title = "Accessibility access",
-                    body = "Spidey needs accessibility to see and control the screen. You can stop it any time.",
-                    granted = false,
-                    warning = if (accessibilityStuck) {
-                        "Accessibility is switched on but the service has not connected, even " +
-                            "after waiting. Turn it off and on again in system settings."
-                    } else {
-                        null
-                    },
-                    actionLabel = "Enable accessibility",
-                    onAction = onEnableAccessibility,
-                )
+            Column(
+                modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter),
+                verticalArrangement = Arrangement.spacedBy(SpideySpacing.xs),
+            ) {
+                SUGGESTIONS.forEach { suggestion ->
+                    SuggestionRow(text = suggestion, onClick = { onInputChange(suggestion) })
+                }
             }
 
-            Spacer(Modifier.height(SpideySpacing.xxs))
-
-            SectionHeader(
-                title = "Recent tasks",
-                modifier = Modifier.fillMaxWidth(),
-                actionLabel = if (recent.isEmpty()) null else "See All",
-                onAction = onOpenHistory,
-            )
-
-            if (recent.isEmpty()) {
-                EmptyState(
-                    title = "No tasks yet",
-                    body = "Ask your agent to do something and it will show up here.",
-                )
-            } else {
-                recent.forEach { record ->
-                    TaskCard(
-                        prompt = record.prompt,
-                        appName = record.appsUsed.firstOrNull(),
-                        state = record.state,
-                        onClick = onOpenHistory,
+            if (recent.isNotEmpty()) {
+                Column {
+                    SectionHeader(
+                        title = "Recent",
+                        modifier = Modifier.fillMaxWidth(),
+                        actionLabel = "See all",
+                        onAction = onOpenHistory,
                     )
+                    recent.forEach { record ->
+                        TaskRow(
+                            prompt = record.prompt,
+                            detail = taskSubtitle(record),
+                            state = record.state,
+                            onClick = onOpenHistory,
+                        )
+                    }
                 }
             }
         }
+
+        Composer(
+            value = input,
+            onValueChange = onInputChange,
+            onSubmit = onSubmit,
+            modifier = Modifier.padding(
+                horizontal = SpideySpacing.screenGutter,
+                vertical = SpideySpacing.sm,
+            ),
+        )
     }
 }
 
@@ -208,44 +204,42 @@ private fun greeting(): String = when (LocalTime.now().hour) {
     else -> "Hello"
 }
 
-@Preview(name = "Home - idle", showBackground = true, widthDp = 360, heightDp = 780)
+@Preview(name = "Home", showBackground = true, widthDp = 360, heightDp = 780)
 @Composable
-private fun HomeIdlePreview() {
+private fun HomePreview() {
     SpideyTheme {
         HomeContent(
             greeting = "Good morning",
             input = "",
             onInputChange = {},
             onSubmit = {},
-            progress = PreviewData.progress(TaskState.IDLE),
             recent = PreviewData.records,
+            routines = PreviewData.routines,
             accessibilityReady = false,
             accessibilityStuck = false,
             onEnableAccessibility = {},
-            onStop = {},
+            onRunRoutine = {},
             onOpenHistory = {},
-            onOpenSettings = {},
         )
     }
 }
 
-@Preview(name = "Home - running (dark)", showBackground = true, widthDp = 360, heightDp = 780)
+@Preview(name = "Home - dark, typing", showBackground = true, widthDp = 360, heightDp = 780)
 @Composable
-private fun HomeRunningDarkPreview() {
+private fun HomeDarkPreview() {
     SpideyTheme(appearance = AppearanceMode.Dark) {
         HomeContent(
             greeting = "Good evening",
-            input = "Open Spotify",
+            input = "Open Spotify and play my liked songs",
             onInputChange = {},
             onSubmit = {},
-            progress = PreviewData.progress(TaskState.EXECUTING),
             recent = emptyList(),
+            routines = emptyList(),
             accessibilityReady = true,
             accessibilityStuck = false,
             onEnableAccessibility = {},
-            onStop = {},
+            onRunRoutine = {},
             onOpenHistory = {},
-            onOpenSettings = {},
         )
     }
 }

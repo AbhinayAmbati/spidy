@@ -3,10 +3,10 @@ package com.example.agent.ui.history
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Build
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,21 +24,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.agent.BuildConfig
 import com.example.agent.core.diagnostics.TaskDiagnostics
 import com.example.agent.domain.model.RecordedStep
 import com.example.agent.domain.model.TaskRecord
+import com.example.agent.ui.components.ActionLog
+import com.example.agent.ui.components.ConfirmDialog
 import com.example.agent.ui.components.EmptyState
 import com.example.agent.ui.components.LabelValueRow
+import com.example.agent.ui.components.LogEntry
+import com.example.agent.ui.components.LogState
 import com.example.agent.ui.components.PrimaryButton
 import com.example.agent.ui.components.ScreenTopBar
 import com.example.agent.ui.components.SecondaryButton
-import com.example.agent.ui.components.SectionHeader
-import com.example.agent.ui.components.SpideyCard
-import com.example.agent.ui.components.StatusDot
+import com.example.agent.ui.components.SectionLabel
 import com.example.agent.ui.components.StatusPill
 import com.example.agent.ui.components.StickyActionBar
 import com.example.agent.ui.components.taskStateColor
@@ -87,6 +91,8 @@ private fun TaskDetailContent(
     onDelete: () -> Unit,
     onCopyDiagnostics: (TaskRecord) -> Unit,
 ) {
+    var confirmDelete by remember { mutableStateOf(false) }
+
     Column(Modifier.fillMaxSize()) {
         ScreenTopBar(title = "Task details", onBack = onBack)
 
@@ -94,7 +100,6 @@ private fun TaskDetailContent(
             EmptyState(
                 title = "Task not found",
                 body = "This task is no longer in your history.",
-                modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter),
             )
             return@Column
         }
@@ -103,64 +108,57 @@ private fun TaskDetailContent(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = SpideySpacing.screenGutter)
                 .padding(bottom = SpideySpacing.lg),
-            verticalArrangement = Arrangement.spacedBy(SpideySpacing.md),
         ) {
-            Text(
-                text = record.prompt,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-
-            StatusPill(label = taskStateLabel(record.state), color = taskStateColor(record.state))
-
-            StatTiles(record)
-
-            record.summary?.takeIf { it.isNotBlank() }?.let {
+            Column(
+                modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter, vertical = SpideySpacing.md),
+                verticalArrangement = Arrangement.spacedBy(SpideySpacing.sm),
+            ) {
                 Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.spideyColors.textSecondary,
+                    text = record.prompt,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
-            }
-
-            // Where the time actually went. Without this an optimisation is unverifiable.
-            if (record.durationMs > 0) {
-                SectionHeader(title = "Performance", modifier = Modifier.fillMaxWidth())
-                SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(SpideySpacing.xs)) {
-                        LabelValueRow(label = "Waiting on the model", value = formatDuration(record.modelMillis))
-                        LabelValueRow(
-                            label = "On the device",
-                            value = formatDuration(record.overheadMillis),
-                        )
-                        if (record.inputTokens > 0 || record.outputTokens > 0) {
-                            LabelValueRow(
-                                label = "Tokens",
-                                value = "${record.inputTokens} in / ${record.outputTokens} out",
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (record.appsUsed.isNotEmpty()) {
-                SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                    LabelValueRow(
-                        label = "Apps used",
-                        value = record.appsUsed.joinToString(", ") { it.substringAfterLast('.') },
+                StatusPill(label = taskStateLabel(record.state), color = taskStateColor(record.state))
+                record.summary?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.spideyColors.textSecondary,
                     )
                 }
             }
 
-            if (record.steps.isNotEmpty()) {
-                SectionHeader(title = "Actions performed", modifier = Modifier.fillMaxWidth())
-                SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(SpideySpacing.sm)) {
-                        record.steps.forEach { RecordedStepRow(it) }
-                    }
+            StatStrip(
+                duration = formatDuration(record.durationMs),
+                steps = record.stepCount.toString(),
+                apps = record.appsUsed.size.toString(),
+            )
+
+            // Where the time actually went. Without this an optimisation is unverifiable.
+            if (record.durationMs > 0) {
+                SectionLabel(text = "Performance")
+                LabelValueRow(label = "Waiting on the model", value = formatDuration(record.modelMillis))
+                LabelValueRow(label = "On the device", value = formatDuration(record.overheadMillis))
+                if (record.inputTokens > 0 || record.outputTokens > 0) {
+                    LabelValueRow(label = "Tokens", value = "${record.inputTokens} in / ${record.outputTokens} out")
                 }
+            }
+
+            if (record.appsUsed.isNotEmpty()) {
+                SectionLabel(text = "Apps")
+                LabelValueRow(
+                    label = "Used",
+                    value = record.appsUsed.joinToString(", ") { it.substringAfterLast('.') },
+                )
+            }
+
+            if (record.steps.isNotEmpty()) {
+                SectionLabel(text = "Actions performed")
+                ActionLog(
+                    entries = record.steps.map { it.toLogEntry() },
+                    modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter),
+                )
             }
         }
 
@@ -172,30 +170,55 @@ private fun TaskDetailContent(
                     onClick = { onCopyDiagnostics(record) },
                     modifier = Modifier.weight(1f),
                 )
-                SecondaryButton(text = "Delete", onClick = onDelete, modifier = Modifier.weight(1f))
+                SecondaryButton(
+                    text = "Delete",
+                    onClick = { confirmDelete = true },
+                    contentColor = MaterialTheme.spideyColors.error,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }
+
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = "Delete this task?",
+            message = "It will be removed from your history.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                confirmDelete = false
+                onDelete()
+            },
+            onDismiss = { confirmDelete = false },
+        )
+    }
 }
 
+/** Three figures side by side with hairlines between them, like the counts on a profile. */
 @Composable
-private fun StatTiles(record: TaskRecord) {
+private fun StatStrip(duration: String, steps: String, apps: String) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(SpideySpacing.sm),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = SpideySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        StatTile(label = "Duration", value = formatDuration(record.durationMs), modifier = Modifier.weight(1f))
-        StatTile(label = "Steps", value = record.stepCount.toString(), modifier = Modifier.weight(1f))
+        Stat(value = duration, label = "Duration", modifier = Modifier.weight(1f))
+        StatDivider()
+        Stat(value = steps, label = "Steps", modifier = Modifier.weight(1f))
+        StatDivider()
+        Stat(value = apps, label = "Apps", modifier = Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
-    SpideyCard(modifier = modifier) {
+private fun Stat(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
         )
         Text(
             text = label,
@@ -206,23 +229,25 @@ private fun StatTile(label: String, value: String, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun RecordedStepRow(step: RecordedStep) {
-    val color = when (step.status) {
-        "Done" -> MaterialTheme.spideyColors.success
-        "Failed" -> MaterialTheme.spideyColors.error
-        "Running" -> MaterialTheme.spideyColors.blue
-        else -> MaterialTheme.spideyColors.border
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        StatusDot(color = color, label = step.status)
-        Spacer(Modifier.width(SpideySpacing.sm))
-        Text(
-            text = step.label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
+private fun StatDivider() {
+    Column(
+        modifier = Modifier
+            .width(1.dp)
+            .height(32.dp)
+            .background(MaterialTheme.spideyColors.border),
+    ) {}
 }
+
+private fun RecordedStep.toLogEntry(): LogEntry = LogEntry(
+    label = label,
+    state = when (status) {
+        "Done" -> LogState.Done
+        "Failed" -> LogState.Failed
+        "Running" -> LogState.Running
+        else -> LogState.Pending
+    },
+    detail = detail,
+)
 
 private fun formatDuration(ms: Long): String {
     if (ms <= 0) return "—"

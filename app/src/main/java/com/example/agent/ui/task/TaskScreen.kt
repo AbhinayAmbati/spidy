@@ -3,27 +3,20 @@ package com.example.agent.ui.task
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -35,17 +28,20 @@ import com.example.agent.domain.model.AwaitingKind
 import com.example.agent.domain.model.StepStatus
 import com.example.agent.domain.model.TaskProgress
 import com.example.agent.domain.model.TaskState
-import com.example.agent.domain.model.TaskStep
-import com.example.agent.ui.components.AgentStatusCard
+import com.example.agent.ui.components.ActionLog
+import com.example.agent.ui.components.AgentMessage
+import com.example.agent.ui.components.Composer
 import com.example.agent.ui.components.ConfirmationSheet
+import com.example.agent.ui.components.LogEntry
+import com.example.agent.ui.components.LogState
 import com.example.agent.ui.components.PrimaryButton
-import com.example.agent.ui.components.PromptBar
+import com.example.agent.ui.components.ProgressBar
 import com.example.agent.ui.components.ScreenTopBar
 import com.example.agent.ui.components.SecondaryButton
-import com.example.agent.ui.components.SectionHeader
-import com.example.agent.ui.components.SpideyCard
-import com.example.agent.ui.components.StatusDot
 import com.example.agent.ui.components.StickyActionBar
+import com.example.agent.ui.components.TextAction
+import com.example.agent.ui.components.TypingDots
+import com.example.agent.ui.components.UserBubble
 import com.example.agent.ui.preview.PreviewData
 import com.example.agent.ui.theme.SpideySpacing
 import com.example.agent.ui.theme.SpideyTheme
@@ -88,6 +84,10 @@ fun TaskScreen(
     }
 }
 
+/**
+ * A task as a conversation: what was asked on the right, the agent's progress on the left,
+ * and a dock at the bottom whose controls change with the task's state.
+ */
 @Composable
 private fun TaskContent(
     progress: TaskProgress,
@@ -102,165 +102,129 @@ private fun TaskContent(
     onAnswer: (String) -> Unit,
 ) {
     var answerText by remember { mutableStateOf("") }
+    val scroll = rememberScrollState()
     val failedOrStopped = progress.state == TaskState.FAILED || progress.state == TaskState.CANCELLED
     val completed = progress.state == TaskState.COMPLETED
     val running = progress.state.isWorking || progress.state == TaskState.PAUSED
+    val asking = progress.state == TaskState.WAITING_FOR_CONFIRMATION &&
+        progress.awaitingKind == AwaitingKind.Question
+    val fraction = if (progress.totalSteps <= 0) 0f else progress.currentStep.toFloat() / progress.totalSteps
 
-    Column(Modifier.fillMaxSize()) {
-        ScreenTopBar(title = "Task", onBack = onBack)
+    // Keep the newest step in view as the agent works.
+    LaunchedEffect(progress.steps.size, progress.state) {
+        scroll.animateScrollTo(scroll.maxValue)
+    }
+
+    Column(Modifier.fillMaxSize().imePadding()) {
+        ScreenTopBar(
+            title = "Task",
+            onBack = onBack,
+            trailing = {
+                if (running || asking) {
+                    TextAction(text = "Stop", onClick = onStop, color = MaterialTheme.spideyColors.error)
+                }
+            },
+        )
+        ProgressBar(
+            fraction = if (completed) 1f else fraction.coerceIn(0f, 1f),
+            modifier = Modifier.fillMaxWidth(),
+            thickness = 2.dp,
+        )
 
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = SpideySpacing.screenGutter)
-                .padding(bottom = SpideySpacing.lg),
-            verticalArrangement = Arrangement.spacedBy(SpideySpacing.md),
+                .verticalScroll(scroll)
+                .padding(horizontal = SpideySpacing.screenGutter, vertical = SpideySpacing.md),
+            verticalArrangement = Arrangement.spacedBy(SpideySpacing.lg),
         ) {
-            Text(
-                text = progress.prompt.ifBlank { "Task" },
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
+            UserBubble(text = progress.prompt.ifBlank { "Task" })
 
-            AgentStatusCard(
-                state = progress.state,
-                message = progress.message,
-                step = progress.currentStep,
-                total = progress.totalSteps,
-                onStop = onStop,
-            )
-
-            // A question from the agent needs a text answer, not a yes/no.
-            if (progress.state == TaskState.WAITING_FOR_CONFIRMATION &&
-                progress.awaitingKind == AwaitingKind.Question
-            ) {
-                PromptBar(
-                    value = answerText,
-                    onValueChange = { answerText = it },
-                    onSubmit = {
-                        if (answerText.isNotBlank()) {
-                            onAnswer(answerText.trim())
-                            answerText = ""
-                        }
-                    },
-                    hint = "Your answer…",
-                )
-            }
-
-            // Failure / cancellation states are shown plainly, with a way forward below.
-            if (failedOrStopped) {
-                progress.error?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.spideyColors.error,
-                    )
-                }
-            }
-
-            SectionHeader(title = "What I'm doing", modifier = Modifier.fillMaxWidth())
-
-            if (progress.steps.isEmpty()) {
+            AgentMessage {
                 Text(
-                    text = "Getting started…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.spideyColors.textSecondary,
+                    text = statusLine(progress),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (progress.state == TaskState.FAILED) {
+                        MaterialTheme.spideyColors.error
+                    } else {
+                        MaterialTheme.colorScheme.onBackground
+                    },
                 )
-            } else {
-                SpideyCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(SpideySpacing.sm)) {
-                        progress.steps.forEach { step -> StepRow(step) }
-                    }
+                if (progress.steps.isNotEmpty()) {
+                    ActionLog(entries = progress.steps.map { LogEntry(it.label, it.status.toLogState(), it.detail) })
+                }
+                if (progress.state.isWorking) {
+                    TypingDots()
                 }
             }
         }
 
-        if (running || failedOrStopped || completed) {
-            StickyActionBar {
-                if (running) {
-                    if (paused) {
-                        PrimaryButton(text = "Resume", onClick = onResume, modifier = Modifier.fillMaxWidth())
-                    } else {
-                        SecondaryButton(text = "Pause", onClick = onPause, modifier = Modifier.fillMaxWidth())
+        when {
+            asking -> Composer(
+                value = answerText,
+                onValueChange = { answerText = it },
+                onSubmit = {
+                    if (answerText.isNotBlank()) {
+                        onAnswer(answerText.trim())
+                        answerText = ""
                     }
+                },
+                hint = "Your answer",
+                modifier = Modifier.padding(
+                    horizontal = SpideySpacing.screenGutter,
+                    vertical = SpideySpacing.sm,
+                ),
+            )
+            running -> StickyActionBar {
+                if (paused) {
+                    PrimaryButton(text = "Resume", onClick = onResume, modifier = Modifier.fillMaxWidth())
+                } else {
+                    SecondaryButton(text = "Pause", onClick = onPause, modifier = Modifier.fillMaxWidth())
                 }
-                if (failedOrStopped) {
+            }
+            failedOrStopped -> StickyActionBar {
+                Row(horizontalArrangement = Arrangement.spacedBy(SpideySpacing.xs)) {
+                    SecondaryButton(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
                     PrimaryButton(
                         text = stringResource(R.string.task_retry),
                         onClick = onRetry,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    SecondaryButton(text = "Back", onClick = onBack, modifier = Modifier.fillMaxWidth())
-                }
-                if (completed) {
-                    PrimaryButton(text = "Done", onClick = onBack, modifier = Modifier.fillMaxWidth())
-                    SecondaryButton(
-                        text = if (routineSaved) "Saved as a routine" else "Save as routine",
-                        onClick = onSaveRoutine,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
+            completed -> StickyActionBar {
+                Row(horizontalArrangement = Arrangement.spacedBy(SpideySpacing.xs)) {
+                    SecondaryButton(
+                        text = if (routineSaved) "Saved" else "Save as routine",
+                        onClick = onSaveRoutine,
+                        enabled = !routineSaved,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PrimaryButton(text = "Done", onClick = onBack, modifier = Modifier.weight(1f))
+                }
+            }
+            else -> Unit
         }
     }
 }
 
-@Composable
-private fun StepRow(step: TaskStep) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            StepIcon(step.status)
-            Spacer(Modifier.width(SpideySpacing.sm))
-            Text(
-                text = step.label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (step.status == StepStatus.Pending) {
-                    MaterialTheme.spideyColors.textSecondary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-            )
-        }
-        // A failed step used to be a bare red cross. Say why it failed.
-        step.detail?.takeIf { it.isNotBlank() && step.status == StepStatus.Failed }?.let { detail ->
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.spideyColors.textSecondary,
-                modifier = Modifier.padding(start = 32.dp, top = 2.dp),
-            )
-        }
-    }
+/** The one sentence the agent says about where the task stands. */
+private fun statusLine(progress: TaskProgress): String = when (progress.state) {
+    TaskState.IDLE -> "Ready when you are."
+    TaskState.PLANNING -> "Working out the steps."
+    TaskState.EXECUTING, TaskState.OBSERVING -> progress.message ?: "Working on it."
+    TaskState.WAITING_FOR_CONFIRMATION -> progress.message ?: "Waiting for your answer."
+    TaskState.PAUSED -> "Paused."
+    TaskState.COMPLETED -> progress.message ?: "Done."
+    TaskState.FAILED -> progress.error ?: "That did not work."
+    TaskState.CANCELLED -> "Stopped."
 }
 
-@Composable
-private fun StepIcon(status: StepStatus) {
-    val colors = MaterialTheme.spideyColors
-    when (status) {
-        StepStatus.Done -> Icon(
-            imageVector = Icons.Filled.CheckCircle,
-            contentDescription = "Completed",
-            tint = colors.success,
-            modifier = Modifier.size(20.dp),
-        )
-        StepStatus.Failed -> Icon(
-            imageVector = Icons.Filled.Close,
-            contentDescription = "Failed",
-            tint = colors.error,
-            modifier = Modifier.size(20.dp),
-        )
-        StepStatus.Running -> StatusDot(
-            color = colors.blue,
-            label = "In progress",
-            modifier = Modifier.padding(5.dp),
-        )
-        StepStatus.Pending -> StatusDot(
-            color = colors.border,
-            label = "Pending",
-            modifier = Modifier.padding(5.dp),
-        )
-    }
+private fun StepStatus.toLogState(): LogState = when (this) {
+    StepStatus.Pending -> LogState.Pending
+    StepStatus.Running -> LogState.Running
+    StepStatus.Done -> LogState.Done
+    StepStatus.Failed -> LogState.Failed
 }
 
 @Preview(name = "Task - working", showBackground = true, widthDp = 360, heightDp = 780)

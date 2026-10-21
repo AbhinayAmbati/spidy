@@ -1,16 +1,29 @@
 package com.example.agent.ui.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -45,13 +58,27 @@ fun SpideyApp(startDestination: String = Destinations.SPLASH) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute in TAB_ROUTES
+    // The bar steps aside while the keyboard is up so the composer sits right on top of it.
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val showBottomBar = currentRoute in TAB_ROUTES && !imeVisible
 
     val tabs = listOf(
-        BottomBarItem(Destinations.HOME, stringResource(R.string.nav_home), Icons.Filled.Home),
-        BottomBarItem(Destinations.HISTORY, stringResource(R.string.nav_tasks), Icons.Filled.History),
-        BottomBarItem(Destinations.ROUTINES, stringResource(R.string.nav_routines), Icons.Filled.Replay),
-        BottomBarItem(Destinations.SETTINGS, stringResource(R.string.nav_settings), Icons.Filled.Settings),
+        BottomBarItem(
+            Destinations.HOME, stringResource(R.string.nav_home),
+            Icons.Outlined.ChatBubbleOutline, Icons.Filled.ChatBubble,
+        ),
+        BottomBarItem(
+            Destinations.HISTORY, stringResource(R.string.nav_tasks),
+            Icons.Outlined.TaskAlt, Icons.Filled.TaskAlt,
+        ),
+        BottomBarItem(
+            Destinations.ROUTINES, stringResource(R.string.nav_routines),
+            Icons.Outlined.PlayCircleOutline, Icons.Filled.PlayCircle,
+        ),
+        BottomBarItem(
+            Destinations.SETTINGS, stringResource(R.string.nav_settings),
+            Icons.Outlined.Settings, Icons.Filled.Settings,
+        ),
     )
 
     Scaffold(
@@ -75,7 +102,11 @@ fun SpideyApp(startDestination: String = Destinations.SPLASH) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.padding(innerPadding),
+            enterTransition = { fadeIn(tween(200)) + slideInHorizontally(tween(240)) { it / 10 } },
+            exitTransition = { fadeOut(tween(120)) },
+            popEnterTransition = { fadeIn(tween(200)) },
+            popExitTransition = { fadeOut(tween(160)) + slideOutHorizontally(tween(200)) { it / 10 } },
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
         ) {
             composable(Destinations.SPLASH) {
                 SplashScreen(
