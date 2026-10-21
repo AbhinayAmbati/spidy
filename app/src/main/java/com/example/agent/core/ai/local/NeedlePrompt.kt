@@ -77,7 +77,9 @@ object NeedlePrompt {
     }
 
     private fun screenOf(messages: List<AgentMessage>): String {
-        val latest = messages.lastOrNull { it.content.contains(OBSERVATION_MARKER) && it.role != MessageRole.System }
+        // Tool results only: the runtime's retry nudges are user messages that also quote the
+        // screen, wrapped in instructions Needle cannot use.
+        val latest = messages.lastOrNull { it.role == MessageRole.Tool && it.content.contains(OBSERVATION_MARKER) }
         val listing = when {
             latest != null -> latest.content.substringAfter(OBSERVATION_MARKER)
             else -> messages.firstOrNull { it.role == MessageRole.User }

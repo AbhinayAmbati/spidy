@@ -199,6 +199,8 @@ class AgentRuntime(
         var replaying = routine != null
 
         var nudges = 0
+        // What the model last said, so a task that ends because it never acted can show it.
+        var lastReply: String? = null
         val loopGuard = LoopGuard()
         // Everything tried this task, keyed by action signature, so the model can be shown
         // what it has already spent instead of being refused after the fact.
@@ -318,6 +320,7 @@ class AgentRuntime(
                     }
                     modelMillis = clock.uptimeMillis() - modelStartedAt
                     response = generated
+                    lastReply = generated.message?.takeIf { it.isNotBlank() } ?: generated.raw
                     calls = generated.calls
                 }
 
@@ -379,8 +382,8 @@ class AgentRuntime(
 
                     finish(
                         taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
-                        "The model kept replying with text instead of acting. That usually means " +
-                            "it doesn't support tool calling — try a different model in Settings.",
+                        "The model never chose an action, so I stopped." +
+                            (lastReply?.let { " Its last answer was: ${it.take(300)}" } ?: ""),
                     )
                     return
                 }
