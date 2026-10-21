@@ -9,14 +9,14 @@
 
     <!--
       Launcher theme. On Android 12+ the system shows this while the process warms
-      up; on older versions the black windowBackground does the same job. Either
-      way the user sees black, then the Compose splash draws the wordmark.
+      up; on older versions the blue windowBackground does the same job. Either
+      way the user sees blue, then the Compose splash draws the wordmark.
     -->
     <style name="Theme.Spidey.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/spidey_black</item>
+        <item name="windowSplashScreenBackground">@color/spidey_blue</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
         <item name="windowSplashScreenAnimationDuration">300</item>
         <item name="postSplashScreenTheme">@style/Theme.Spidey</item>
-        <item name="android:windowBackground">@color/spidey_black</item>
+        <item name="android:windowBackground">@color/spidey_blue</item>
     </style>
 </resources>

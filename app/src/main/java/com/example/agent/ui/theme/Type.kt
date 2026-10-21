@@ -9,37 +9,15 @@ import androidx.compose.ui.unit.sp
 import com.example.agent.R
 
 /*
- * Two faces, deliberately split by role:
- *
- *   Headings      Instrument Serif  — display + headline styles
- *   Body / UI     Inter             — titles, body, labels, buttons
- *
- * Inter is bundled as static instances (400/500/600) rather than the variable
- * font, so weights resolve exactly without relying on experimental variation APIs.
+ * One face, Inter, in bold-leaning weights. Headlines are SemiBold (the heaviest weight
+ * bundled) so the hierarchy reads like Instamart's heavy Gilroy.
  */
 
-/** Body/UI face. */
+/** The app's only typeface. Static instances (400/500/600) so weights resolve exactly. */
 val Inter = FontFamily(
     Font(R.font.inter_regular, FontWeight.Normal),
     Font(R.font.inter_medium, FontWeight.Medium),
     Font(R.font.inter_semibold, FontWeight.SemiBold),
-)
-
-/** Heading face. Instrument Serif ships a single weight. */
-val InstrumentSerif = FontFamily(
-    Font(R.font.instrument_serif_regular, FontWeight.Normal),
-)
-
-private fun heading(
-    size: Int,
-    lineHeight: Int,
-    letterSpacing: Double = 0.0,
-) = TextStyle(
-    fontFamily = InstrumentSerif,
-    fontWeight = FontWeight.Normal,
-    fontSize = size.sp,
-    lineHeight = lineHeight.sp,
-    letterSpacing = letterSpacing.sp,
 )
 
 private fun ui(
@@ -56,19 +34,17 @@ private fun ui(
 )
 
 val SpideyTypography = Typography(
-    // ---- Headings: Instrument Serif ----
-    displayLarge = heading(36, 44, -0.25),
-    displayMedium = heading(32, 40, -0.25),
-    headlineMedium = heading(28, 36),
-    headlineSmall = heading(24, 32),
+    displayLarge = ui(36, 42, FontWeight.SemiBold, -0.5),
+    displayMedium = ui(30, 36, FontWeight.SemiBold, -0.4),
+    headlineMedium = ui(26, 32, FontWeight.SemiBold, -0.3),
+    headlineSmall = ui(22, 28, FontWeight.SemiBold, -0.2),
 
-    // ---- Body / UI: Inter ----
-    titleLarge = ui(20, 28, FontWeight.SemiBold),
-    titleMedium = ui(18, 26, FontWeight.Medium),
-    bodyLarge = ui(17, 26, FontWeight.Normal),
-    bodyMedium = ui(15, 23, FontWeight.Normal),
-    bodySmall = ui(13, 18, FontWeight.Normal),
-    labelLarge = ui(15, 20, FontWeight.Medium),
-    labelMedium = ui(14, 20, FontWeight.Medium, 0.1),
-    labelSmall = ui(13, 18, FontWeight.Medium, 0.2),
+    titleLarge = ui(20, 26, FontWeight.SemiBold),
+    titleMedium = ui(17, 24, FontWeight.SemiBold),
+    bodyLarge = ui(16, 24, FontWeight.Normal),
+    bodyMedium = ui(14, 21, FontWeight.Normal),
+    bodySmall = ui(12, 17, FontWeight.Normal),
+    labelLarge = ui(15, 20, FontWeight.SemiBold),
+    labelMedium = ui(13, 18, FontWeight.SemiBold),
+    labelSmall = ui(12, 16, FontWeight.Medium, 0.2),
 )

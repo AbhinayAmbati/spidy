@@ -25,121 +25,101 @@ val LocalMotionEnabled = staticCompositionLocalOf { true }
 /*
  * Every role is set explicitly.
  *
- * Material 3's `lightColorScheme()`/`darkColorScheme()` fill any role you omit with
- * the *baseline* palette, whose neutrals are lavender-grey (#F3EDF7 and friends).
- * Omitting the surfaceContainer family therefore leaked grey into any component
- * that reads it — DropdownMenu uses `surfaceContainer`, for example. Setting the
- * full neutral ramp keeps the UI monochrome.
+ * Material 3's `lightColorScheme()`/`darkColorScheme()` fill any role you omit with the
+ * baseline palette, whose neutrals are lavender-grey. Setting the whole surface ramp
+ * keeps menus, sheets and containers on the blue/white palette.
  */
 
-// Light neutral ramp
-private val LSurfaceLowest = Color(0xFFFFFFFF)
-private val LSurfaceLow = Color(0xFFFCFCFA)
-private val LSurface = Color(0xFFF7F7F5)
-private val LSurfaceHigh = Color(0xFFF1F1EE)
-private val LSurfaceHighest = Color(0xFFEBEBE7)
-private val LSurfaceDim = Color(0xFFE5E3DE)
-private val LSurfaceBright = Color(0xFFFFFFFF)
-
-// Dark neutral ramp
-private val DSurfaceLowest = Color(0xFF0A0A0A)
-private val DSurfaceLow = Color(0xFF121212)
-private val DSurface = Color(0xFF171717)
-private val DSurfaceHigh = Color(0xFF1F1F1F)
-private val DSurfaceHighest = Color(0xFF262626)
-private val DSurfaceDim = Color(0xFF0D0D0D)
-private val DSurfaceBright = Color(0xFF2A2A2A)
-
 private val LightScheme = lightColorScheme(
-    primary = LightPrimary,
+    primary = SpideyBlue,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFEDE6E0),
-    onPrimaryContainer = LightText,
+    primaryContainer = SpideyBlueTint,
+    onPrimaryContainer = SpideyBlueDeep,
 
-    secondary = LightBrownAccent,
+    secondary = SpideyBlueDeep,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFEFEDE8),
-    onSecondaryContainer = LightText,
+    secondaryContainer = SpideyBlueTint,
+    onSecondaryContainer = SpideyBlueDeep,
 
-    tertiary = LightBrownDark,
+    tertiary = StatusSuccessLight,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFEFEDE8),
-    onTertiaryContainer = LightText,
+    tertiaryContainer = Color(0xFFDDF5EC),
+    onTertiaryContainer = Color(0xFF00573A),
 
-    background = LSurface,
+    background = LightBackground,
     onBackground = LightText,
 
-    surface = LSurfaceLowest,
+    surface = LightSurface,
     onSurface = LightText,
-    surfaceVariant = Color(0xFFEFEDE8),
+    surfaceVariant = Color(0xFFEEF0F7),
     onSurfaceVariant = LightTextSecondary,
-    surfaceTint = LightPrimary,
-    inverseSurface = LightPrimary,
-    inverseOnSurface = Color(0xFFF5F5F5),
-    inversePrimary = DarkBrownAccent,
+    surfaceTint = SpideyBlue,
+    inverseSurface = SpideyInk,
+    inverseOnSurface = Color.White,
+    inversePrimary = SpideyBlueLight,
 
-    surfaceBright = LSurfaceBright,
-    surfaceDim = LSurfaceDim,
-    surfaceContainerLowest = LSurfaceLowest,
-    surfaceContainerLow = LSurfaceLow,
-    surfaceContainer = LSurface,
-    surfaceContainerHigh = LSurfaceHigh,
-    surfaceContainerHighest = LSurfaceHighest,
+    surfaceBright = Color.White,
+    surfaceDim = Color(0xFFE3E6EF),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFFAFBFE),
+    surfaceContainer = Color.White,
+    surfaceContainerHigh = Color(0xFFF1F3F9),
+    surfaceContainerHighest = Color(0xFFEBEEF6),
 
     outline = LightBorder,
     outlineVariant = LightBorder,
 
     error = StatusErrorLight,
     onError = Color.White,
-    errorContainer = Color(0xFFF3E0DD),
-    onErrorContainer = Color(0xFF5C2B25),
+    errorContainer = Color(0xFFFDE7E4),
+    onErrorContainer = Color(0xFF7A1A12),
 
     scrim = Color.Black,
 )
 
 private val DarkScheme = darkColorScheme(
-    primary = DarkPrimary,
-    onPrimary = Color.Black,
-    primaryContainer = Color(0xFF2E2620),
-    onPrimaryContainer = DarkText,
+    primary = SpideyBlueLight,
+    onPrimary = Color(0xFF00133D),
+    primaryContainer = Color(0xFF1B2A55),
+    onPrimaryContainer = Color(0xFFD6E1FF),
 
-    secondary = DarkBrownAccent,
-    onSecondary = Color.Black,
-    secondaryContainer = Color(0xFF1F1F1F),
-    onSecondaryContainer = DarkText,
+    secondary = Color(0xFF8FB0FF),
+    onSecondary = Color(0xFF00133D),
+    secondaryContainer = Color(0xFF1B2A55),
+    onSecondaryContainer = Color(0xFFD6E1FF),
 
-    tertiary = DarkBrownDark,
-    onTertiary = Color.Black,
-    tertiaryContainer = Color(0xFF2E2620),
-    onTertiaryContainer = DarkText,
+    tertiary = StatusSuccessDark,
+    onTertiary = Color(0xFF00281A),
+    tertiaryContainer = Color(0xFF0F3A2B),
+    onTertiaryContainer = Color(0xFFB7F2DC),
 
-    background = DSurfaceDim,
+    background = DarkBackground,
     onBackground = DarkText,
 
-    surface = DSurface,
+    surface = DarkSurface,
     onSurface = DarkText,
-    surfaceVariant = Color(0xFF1F1F1F),
+    surfaceVariant = Color(0xFF1D2540),
     onSurfaceVariant = DarkTextSecondary,
-    surfaceTint = DarkPrimary,
-    inverseSurface = Color(0xFFF5F5F5),
-    inverseOnSurface = Color(0xFF111111),
-    inversePrimary = LightBrownAccent,
+    surfaceTint = SpideyBlueLight,
+    inverseSurface = Color(0xFFF1F3FA),
+    inverseOnSurface = Color(0xFF0B1020),
+    inversePrimary = SpideyBlue,
 
-    surfaceBright = DSurfaceBright,
-    surfaceDim = DSurfaceDim,
-    surfaceContainerLowest = DSurfaceLowest,
-    surfaceContainerLow = DSurfaceLow,
-    surfaceContainer = DSurface,
-    surfaceContainerHigh = DSurfaceHigh,
-    surfaceContainerHighest = DSurfaceHighest,
+    surfaceBright = Color(0xFF232B45),
+    surfaceDim = DarkBackground,
+    surfaceContainerLowest = Color(0xFF080C19),
+    surfaceContainerLow = Color(0xFF111729),
+    surfaceContainer = DarkSurface,
+    surfaceContainerHigh = Color(0xFF1B2238),
+    surfaceContainerHighest = Color(0xFF232B45),
 
     outline = DarkBorder,
     outlineVariant = DarkBorder,
 
     error = StatusErrorDark,
-    onError = Color.Black,
-    errorContainer = Color(0xFF3A211E),
-    onErrorContainer = Color(0xFFF3D9D5),
+    onError = Color(0xFF3B0A06),
+    errorContainer = Color(0xFF3F1512),
+    onErrorContainer = Color(0xFFFFDAD6),
 
     scrim = Color.Black,
 )

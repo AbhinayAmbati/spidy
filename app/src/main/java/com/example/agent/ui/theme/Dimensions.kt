@@ -4,8 +4,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * The spacing scale. Spidey deliberately uses *more* whitespace than a typical
- * Android app: prefer 24–32dp between major sections so the UI can breathe.
+ * The spacing scale. Generous on purpose: prefer 24dp between major sections so the
+ * big rounded cards have room to breathe.
  */
 object SpideySpacing {
     val xxs: Dp = 4.dp
@@ -15,31 +15,22 @@ object SpideySpacing {
     val lg: Dp = 24.dp
     val xl: Dp = 32.dp
     val xxl: Dp = 40.dp
-    val xxxl: Dp = 48.dp
-    val huge: Dp = 64.dp
 
     /** Standard horizontal screen gutter. */
-    val screenGutter: Dp = 20.dp
+    val screenGutter: Dp = 16.dp
 
     /** Default vertical gap between major sections. */
-    val sectionGap: Dp = 28.dp
+    val sectionGap: Dp = 24.dp
 
-    /**
-     * Visual height for buttons and select fields. Material's own default is 40dp;
-     * keeping it here stops individual controls drifting larger than the rest.
-     */
-    val controlHeight: Dp = 40.dp
+    /** Height of buttons and the search bar. */
+    val controlHeight: Dp = 52.dp
 
     /** Default inset inside a card. */
-    val cardPadding: Dp = 18.dp
+    val cardPadding: Dp = 16.dp
 
-    /** Minimum tap target. 44dp keeps controls comfortable without bulk. */
-    val minTouchTarget: Dp = 44.dp
-}
+    /** Minimum tap target. */
+    val minTouchTarget: Dp = 48.dp
 
-object SpideyElevation {
-    val flat: Dp = 0.dp
-    val soft: Dp = 1.dp
-    val raised: Dp = 3.dp
-    val floating: Dp = 6.dp
+    /** Room left at the bottom of a scrolling screen so a sticky action bar never hides content. */
+    val stickyBarClearance: Dp = 96.dp
 }
