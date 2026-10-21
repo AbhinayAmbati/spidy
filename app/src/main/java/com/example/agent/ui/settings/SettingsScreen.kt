@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.agent.BuildConfig
 import com.example.agent.R
+import com.example.agent.core.ai.local.ModelStatus
 import com.example.agent.core.permissions.PermissionStatus
 import com.example.agent.core.permissions.PermissionUtils
 import com.example.agent.domain.model.AppearanceMode
@@ -65,6 +66,8 @@ private data class SettingsUiState(
     val overlayAllowed: Boolean,
     val accessibilityStuck: Boolean,
     val permissions: PermissionStatus,
+    val needle: ModelStatus,
+    val whistle: ModelStatus,
 )
 
 @Composable
@@ -81,6 +84,8 @@ fun SettingsScreen(
     val overlayAllowed by viewModel.overlayAllowed.collectAsStateWithLifecycle()
     val accessibilityStuck by viewModel.accessibilityStuck.collectAsStateWithLifecycle()
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
+    val needle by viewModel.needleStatus.collectAsStateWithLifecycle()
+    val whistle by viewModel.whistleStatus.collectAsStateWithLifecycle()
 
     // Overlay permission, accessibility and notification access are all granted on *system*
     // screens, so the state has to be re-read on the way back or a row would still say
@@ -104,6 +109,8 @@ fun SettingsScreen(
             overlayAllowed = overlayAllowed,
             accessibilityStuck = accessibilityStuck,
             permissions = permissions,
+            needle = needle,
+            whistle = whistle,
         ),
         versionName = BuildConfig.VERSION_NAME,
         onEnableAccessibility = {
@@ -121,6 +128,8 @@ fun SettingsScreen(
         onOpenMemory = onOpenMemory,
         onOpenTerms = onOpenTerms,
         onOpenOnboarding = onOpenOnboarding,
+        onDownloadNeedle = viewModel::downloadNeedle,
+        onDownloadWhistle = viewModel::downloadWhistle,
     )
 }
 
@@ -139,6 +148,8 @@ private fun SettingsContent(
     onOpenMemory: () -> Unit,
     onOpenTerms: () -> Unit,
     onOpenOnboarding: () -> Unit,
+    onDownloadNeedle: () -> Unit,
+    onDownloadWhistle: () -> Unit,
 ) {
     var confirmClear by remember { mutableStateOf(false) }
     val colors = MaterialTheme.spideyColors
@@ -155,8 +166,10 @@ private fun SettingsContent(
             ProfileHeader(versionName = versionName)
 
             OnDeviceModelSection(
-                needleStatus = ModelStatus.NotDownloaded,
-                whistleStatus = ModelStatus.NotDownloaded,
+                needleStatus = state.needle,
+                whistleStatus = state.whistle,
+                onDownloadNeedle = onDownloadNeedle,
+                onDownloadWhistle = onDownloadWhistle,
             )
 
             SectionLabel(text = "Permissions")
@@ -342,6 +355,8 @@ private fun SettingsPreview() {
                     notificationListenerEnabled = false,
                     notificationsGranted = true,
                 ),
+                needle = ModelStatus.Ready,
+                whistle = ModelStatus.NotDownloaded,
             ),
             versionName = "1.0",
             onEnableAccessibility = {},
@@ -355,6 +370,8 @@ private fun SettingsPreview() {
             onOpenMemory = {},
             onOpenTerms = {},
             onOpenOnboarding = {},
+            onDownloadNeedle = {},
+            onDownloadWhistle = {},
         )
     }
 }

@@ -1,6 +1,7 @@
 package com.example.agent.di
 
 import android.content.Context
+import android.net.ConnectivityManager
 import androidx.room.Room
 import com.example.agent.automation.AndroidAutomationManager
 import com.example.agent.automation.accessibility.AccessibilityController
@@ -24,12 +25,15 @@ import com.example.agent.automation.tools.TypeTextTool
 import com.example.agent.automation.tools.WaitTool
 import com.example.agent.core.agent.ActionValidator
 import com.example.agent.core.agent.AgentRuntime
-import com.example.agent.core.agent.ConfiguredModelSource
 import com.example.agent.core.agent.DeviceClock
 import com.example.agent.core.agent.DeviceScreen
 import com.example.agent.core.agent.StoredTaskJournal
 import com.example.agent.core.agent.TouchToStopWatcher
 import com.example.agent.core.ai.AIProviderFactory
+import com.example.agent.core.ai.local.ModelDownloader
+import com.example.agent.core.ai.local.OkHttpRangeSource
+import com.example.agent.core.ai.local.OnDeviceModelManager
+import com.example.agent.core.ai.provider.OpenAICompatibleProvider
 import com.example.agent.core.security.SecureCredentialStore
 import com.example.agent.data.local.AgentDatabase
 import com.example.agent.data.local.TaskDao
@@ -45,6 +49,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import java.io.File
 import javax.inject.Singleton
 
 @Module
@@ -146,8 +151,26 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideOnDeviceModels(
+        @ApplicationContext context: Context,
+        @ApplicationScope scope: CoroutineScope,
+    ): OnDeviceModelManager {
+        val connectivity = context.getSystemService(ConnectivityManager::class.java)
+        return OnDeviceModelManager(
+            downloader = ModelDownloader(
+                source = OkHttpRangeSource(OpenAICompatibleProvider.defaultClient()),
+                directory = File(context.filesDir, "models"),
+            ),
+            scope = scope,
+            // Unknown counts as metered: better to wait for the user than spend their data.
+            isMetered = { connectivity?.isActiveNetworkMetered ?: true },
+        )
+    }
+
+    @Provides
+    @Singleton
     fun provideRuntime(
-        providerFactory: AIProviderFactory,
+        models: OnDeviceModelManager,
         settings: SettingsRepository,
         registry: ToolRegistry,
         validator: ActionValidator,
@@ -157,7 +180,7 @@ object AppModule {
         memory: MemoryRepository,
         @ApplicationScope scope: CoroutineScope,
     ): AgentRuntime = AgentRuntime(
-        models = ConfiguredModelSource(providerFactory, settings),
+        models = models,
         registry = registry,
         validator = validator,
         screen = DeviceScreen(automation, observer),

@@ -3,6 +3,8 @@ package com.example.agent.ui.settings
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.agent.core.ai.local.ModelStatus
+import com.example.agent.core.ai.local.OnDeviceModelManager
 import com.example.agent.core.permissions.AccessibilityWatch
 import com.example.agent.core.permissions.PermissionStatus
 import com.example.agent.core.permissions.PermissionUtils
@@ -26,8 +28,17 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val history: TaskHistoryRepository,
+    private val models: OnDeviceModelManager,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    val needleStatus: StateFlow<ModelStatus> = models.needle
+
+    val whistleStatus: StateFlow<ModelStatus> = models.whistle
+
+    fun downloadNeedle() = models.downloadNeedle()
+
+    fun downloadWhistle() = models.downloadWhistle()
 
     val appearance: StateFlow<AppearanceMode> = settings.appearance
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppearanceMode.System)
