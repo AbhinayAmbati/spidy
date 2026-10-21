@@ -29,6 +29,11 @@ jobs:
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
 
+      # The on-device engine (libneedle.a, needle.h) is not committed. Fetching it, verified
+      # against pinned hashes, is what switches the native build on.
+      - name: Fetch the on-device engine
+        run: python3 tools/fetch_needle_engine.py
+
       # Runs before the compiler, because a missing import for one of our own types is
       # a plain source mistake that costs a full Gradle run to discover otherwise.
       - name: Check cross-package imports

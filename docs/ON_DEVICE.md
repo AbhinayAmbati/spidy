@@ -1,8 +1,8 @@
 # On-device inference (Cactus Needle 3 and Whistle)
 
-Status: the engine bridge, the provider and its tests exist. It is **not wired into the app
-yet**, because whether Needle 3 is accurate enough for phone control has to be measured on a
-real device first (see "Feasibility spike").
+Status: wired in. The agent runs on Needle 3 on the device, downloaded on first launch (Wi-Fi) or
+from Settings. How accurate it is for phone control is still to be measured on a real device
+(see "Feasibility spike").
 
 ## What is here
 
@@ -24,8 +24,7 @@ python tools/fetch_needle_engine.py
 
 Both files are verified against pinned SHA-256 hashes. Once `app/src/main/cpp/engine/libneedle.a`
 exists, Gradle builds the native bridge (arm64-v8a, `c++_shared`); without it the app builds as
-before and `NeedleNative.isAvailable` is false. CI does not fetch the engine, so it does not
-compile the C++.
+before and `NeedleNative.isAvailable` is false. CI and the release workflow fetch the engine, so they compile the C++.
 
 ## Pinned artefacts (Hugging Face, Apache-2.0)
 

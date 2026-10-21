@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,24 +25,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.agent.core.ai.local.ModelStatus
+import com.example.agent.ui.components.SecondaryButton
 import com.example.agent.ui.components.SpideyCard
 import com.example.agent.ui.components.StatusPill
 import com.example.agent.ui.theme.SpideySpacing
 import com.example.agent.ui.theme.SpideyTheme
 import com.example.agent.ui.theme.spideyColors
 
-/** Where a downloadable on-device model stands. */
-enum class ModelStatus { NotDownloaded, Ready }
-
 /**
  * The on-device models Spidey runs on: Needle 3 for tool calling and Whistle for speech to
- * text. This is a static placeholder until the download flow lands; it takes the status as a
- * parameter so wiring it up later only changes the caller.
+ * text, with each one's download state.
  */
 @Composable
 fun OnDeviceModelCard(
     needleStatus: ModelStatus,
     whistleStatus: ModelStatus,
+    onDownloadNeedle: () -> Unit,
+    onDownloadWhistle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     SpideyCard(modifier = modifier.fillMaxWidth()) {
@@ -62,48 +63,92 @@ fun OnDeviceModelCard(
                 name = "Needle 3",
                 role = "Tool calling",
                 status = needleStatus,
+                onDownload = onDownloadNeedle,
             )
             ModelRow(
                 icon = Icons.Filled.Mic,
                 name = "Whistle",
                 role = "Speech to text",
                 status = whistleStatus,
+                onDownload = onDownloadWhistle,
             )
         }
     }
 }
 
 @Composable
-private fun ModelRow(icon: ImageVector, name: String, role: String, status: ModelStatus) {
+private fun ModelRow(
+    icon: ImageVector,
+    name: String,
+    role: String,
+    status: ModelStatus,
+    onDownload: () -> Unit,
+) {
     val colors = MaterialTheme.spideyColors
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(colors.blueTint),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = colors.blue)
+    Column(verticalArrangement = Arrangement.spacedBy(SpideySpacing.xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(colors.blueTint),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(imageVector = icon, contentDescription = null, tint = colors.blue)
+            }
+            Spacer(Modifier.width(SpideySpacing.sm))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = role,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textSecondary,
+                )
+            }
+            StatusPill(label = statusLabel(status), color = statusColor(status))
         }
-        Spacer(Modifier.width(SpideySpacing.sm))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+
+        when (status) {
+            is ModelStatus.Downloading -> LinearProgressIndicator(
+                progress = { status.percent / 100f },
+                modifier = Modifier.fillMaxWidth(),
+                color = colors.blue,
+                trackColor = colors.blueTint,
             )
-            Text(
-                text = role,
+            is ModelStatus.Failed -> Text(
+                text = status.message,
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary,
+                color = colors.error,
+            )
+            else -> Unit
+        }
+
+        if (status is ModelStatus.NotDownloaded || status is ModelStatus.Failed) {
+            SecondaryButton(
+                text = if (status is ModelStatus.Failed) "Retry" else "Download",
+                onClick = onDownload,
             )
         }
-        StatusPill(
-            label = if (status == ModelStatus.Ready) "Ready" else "Not downloaded",
-            color = if (status == ModelStatus.Ready) colors.success else colors.warning,
-        )
     }
+}
+
+private fun statusLabel(status: ModelStatus): String = when (status) {
+    ModelStatus.Ready -> "Ready"
+    ModelStatus.NotDownloaded -> "Not downloaded"
+    is ModelStatus.Downloading -> "${status.percent}%"
+    is ModelStatus.Failed -> "Failed"
+}
+
+@Composable
+private fun statusColor(status: ModelStatus) = when (status) {
+    ModelStatus.Ready -> MaterialTheme.spideyColors.success
+    ModelStatus.NotDownloaded -> MaterialTheme.spideyColors.warning
+    is ModelStatus.Downloading -> MaterialTheme.spideyColors.blue
+    is ModelStatus.Failed -> MaterialTheme.spideyColors.error
 }
 
 @Preview(name = "On-device model", showBackground = true, widthDp = 360)
@@ -111,8 +156,10 @@ private fun ModelRow(icon: ImageVector, name: String, role: String, status: Mode
 private fun OnDeviceModelCardPreview() {
     SpideyTheme {
         OnDeviceModelCard(
-            needleStatus = ModelStatus.NotDownloaded,
-            whistleStatus = ModelStatus.Ready,
+            needleStatus = ModelStatus.Downloading(downloadedBytes = 12_000_000, totalBytes = 35_335_380),
+            whistleStatus = ModelStatus.NotDownloaded,
+            onDownloadNeedle = {},
+            onDownloadWhistle = {},
             modifier = Modifier.width(360.dp),
         )
     }
