@@ -22,22 +22,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.agent.ui.theme.Inter
 import com.example.agent.ui.theme.LocalMotionEnabled
-import com.example.agent.ui.theme.SpideyBlack
-import com.example.agent.ui.theme.SpideyRed
+import com.example.agent.ui.theme.PillShape
+import com.example.agent.ui.theme.SpideyBlue
+import com.example.agent.ui.theme.SpideyTheme
 import kotlinx.coroutines.delay
 
 /**
- * The launch screen: pure black, the wordmark in red cursive handwriting.
+ * The launch screen: solid Instamart blue with a bold white wordmark.
  *
- * The handwriting uses the platform's built-in cursive family, so there is no font
- * to bundle or license. To use a specific script face, drop a .ttf into
- * res/font/ and swap [FontFamily.Cursive] for that FontFamily here.
+ * The Android 12 system splash shows the same blue (see `Theme.Spidey.Splash`), so the
+ * hand-off to this screen is seamless.
  */
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
@@ -70,10 +72,15 @@ fun SplashScreen(onFinished: () -> Unit) {
         onFinished()
     }
 
+    SplashContent(alpha = alpha, scale = scale, ruleWidth = ruleWidth)
+}
+
+@Composable
+private fun SplashContent(alpha: Float, scale: Float, ruleWidth: Float) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(SpideyBlack),
+            .background(SpideyBlue),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -84,33 +91,43 @@ fun SplashScreen(onFinished: () -> Unit) {
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = "Spidey",
-                fontFamily = FontFamily.Cursive,
-                fontWeight = FontWeight.Normal,
-                fontSize = 76.sp,
-                color = androidx.compose.ui.graphics.Color.White,
+                text = "spidey",
+                fontFamily = Inter,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 64.sp,
+                letterSpacing = (-1.5).sp,
+                color = Color.White,
                 textAlign = TextAlign.Center,
             )
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // A thin red rule that draws itself in beneath the wordmark.
+            // A white pill rule that draws itself in beneath the wordmark.
             Box(
                 Modifier
-                    .width((120 * ruleWidth).dp)
-                    .height(2.dp)
-                    .background(SpideyRed.copy(alpha = 0.65f)),
+                    .width((96 * ruleWidth).dp)
+                    .height(4.dp)
+                    .background(Color.White, PillShape),
             )
 
             Spacer(Modifier.height(18.dp))
 
             Text(
                 text = "your on-device agent",
-                fontSize = 13.sp,
-                letterSpacing = 3.sp,
-                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.45f),
+                fontFamily = Inter,
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                color = Color.White.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center,
             )
         }
+    }
+}
+
+@Preview(name = "Splash", showBackground = true, widthDp = 360, heightDp = 720)
+@Composable
+private fun SplashPreview() {
+    SpideyTheme {
+        SplashContent(alpha = 1f, scale = 1f, ruleWidth = 1f)
     }
 }

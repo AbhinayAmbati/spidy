@@ -5,7 +5,6 @@ object Destinations {
     const val HOME = "home"
     const val TASKS = "tasks"
     const val SETTINGS = "settings"
-    const val PROVIDER = "provider"
     const val ONBOARDING = "onboarding"
     const val MEMORY = "memory"
     const val ROUTINES = "routines"

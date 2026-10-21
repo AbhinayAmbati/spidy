@@ -3,14 +3,14 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- abstract red spider emblem -->
+    <!-- abstract white spider emblem on the blue splash -->
     <path
-        android:fillColor="#D32F2F"
+        android:fillColor="#FFFFFF"
         android:pathData="M54,18a36,36 0 1,0 0.01,0z" />
     <path
-        android:fillColor="#000000"
+        android:fillColor="#0050FF"
         android:pathData="M54,32a22,22 0 1,0 0.01,0z" />
     <path
-        android:fillColor="#D32F2F"
+        android:fillColor="#FFFFFF"
         android:pathData="M54,44a10,10 0 1,0 0.01,0z" />
 </vector>
