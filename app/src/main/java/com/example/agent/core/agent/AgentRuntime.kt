@@ -762,6 +762,10 @@ class AgentRuntime(
 
             finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
                 "I reached the ${TaskProgress.MAX_AGENT_STEPS}-step limit without finishing. You can refine the request and try again.")
+
+                // A batch that stopped early leaves calls with no result, which providers reject.
+                messages += SkippedCalls.resultsFor(messages, callRefs)
+                trim(messages)
         } catch (e: AIProviderException) {
             finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED, friendly(e))
         } catch (e: kotlinx.coroutines.CancellationException) {
