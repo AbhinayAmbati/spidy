@@ -190,10 +190,15 @@ class OpenAICompatibleProvider(
     companion object {
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build()
+        // One client for every provider and task, so connections and threads are pooled.
+        private val sharedClient: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .build()
+        }
+
+        fun defaultClient(): OkHttpClient = sharedClient
     }
 }
 

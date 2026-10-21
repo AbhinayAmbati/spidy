@@ -131,14 +131,7 @@ class AnthropicProvider(
     private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {
         client.newCall(request).awaitResponse().use { response ->
             val text = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                throw when (response.code) {
-                        401, 403 -> AIProviderException(AIProviderException.Kind.Unauthorized, "The API key was rejected")
-                        429 -> AIProviderException(AIProviderException.Kind.RateLimited, "Rate limit reached")
-                        in 500..599 -> AIProviderException(AIProviderException.Kind.Server, "Provider error (${response.code})")
-                        else -> AIProviderException(AIProviderException.Kind.Unknown, "Request failed (${response.code})")
-                    }
-                }
+            if (!response.isSuccessful) throw ProviderHttpErrors.exceptionFor(response.code, text)
             text
         }
     }
