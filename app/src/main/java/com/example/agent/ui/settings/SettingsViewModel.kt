@@ -9,7 +9,6 @@ import com.example.agent.core.permissions.PermissionUtils
 import com.example.agent.data.preferences.SettingsRepository
 import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.AppearanceMode
-import com.example.agent.domain.model.ProviderConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Intent
@@ -32,9 +31,6 @@ class SettingsViewModel @Inject constructor(
 
     val appearance: StateFlow<AppearanceMode> = settings.appearance
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppearanceMode.System)
-
-    val providerConfig: StateFlow<ProviderConfig> = settings.providerConfig
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProviderConfig())
 
     val memoryEnabled: StateFlow<Boolean> = settings.memoryEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
