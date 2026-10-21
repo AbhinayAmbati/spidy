@@ -129,7 +129,7 @@ class AnthropicProvider(
      * dispatcher (viewModelScope) cannot trigger NetworkOnMainThreadException.
      */
     private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {
-        client.newCall(request).execute().use { response ->
+        client.newCall(request).awaitResponse().use { response ->
             val text = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 throw when (response.code) {

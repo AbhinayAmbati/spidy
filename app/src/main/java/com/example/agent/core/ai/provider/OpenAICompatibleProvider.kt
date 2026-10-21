@@ -149,7 +149,7 @@ class OpenAICompatibleProvider(
      */
     private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {
         try {
-            client.newCall(request).execute().use { response ->
+            client.newCall(request).awaitResponse().use { response ->
                 val bodyText = response.body?.string().orEmpty()
                 if (response.isSuccessful) return@withContext bodyText
 

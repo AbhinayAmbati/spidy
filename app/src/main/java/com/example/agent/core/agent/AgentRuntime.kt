@@ -380,6 +380,10 @@ class AgentRuntime(
                     beginConversation()
                     val generated = try {
                         ensureProvider().generateResponse(messages, registry.specs())
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        // Stop pressed mid-call. Reporting it as a provider failure overwrote
+                        // the CANCELLED state that stop() had just set.
+                        throw e
                     } catch (e: Exception) {
                         finish(taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED, friendly(e))
                         return
