@@ -12,6 +12,13 @@ interface AIProvider {
     val id: String
 
     /**
+     * True when the same conversation always gets the same reply. Asking again with a nudge
+     * appended is pointless then (an on-device model ignores the nudge), so the runtime ends the
+     * task at the first empty reply instead of spending the retries.
+     */
+    val isDeterministic: Boolean get() = false
+
+    /**
      * @param messages the running conversation (system prompt first).
      * @param tools the tools currently offered to the model.
      * @return the model's next move, or a plain message when it is done.

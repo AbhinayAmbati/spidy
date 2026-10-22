@@ -201,6 +201,8 @@ class AgentRuntime(
         var nudges = 0
         // What the model last said, so a task that ends because it never acted can show it.
         var lastReply: String? = null
+        // Set from the provider after each call; a deterministic one is not nudged and retried.
+        var deterministic = false
         val loopGuard = LoopGuard()
         // Everything tried this task, keyed by action signature, so the model can be shown
         // what it has already spent instead of being refused after the fact.
@@ -309,7 +311,9 @@ class AgentRuntime(
                     val modelStartedAt = clock.uptimeMillis()
                     beginConversation()
                     val generated = try {
-                        ensureProvider().generateResponse(messages, registry.specs())
+                        val provider = ensureProvider()
+                        deterministic = provider.isDeterministic
+                        provider.generateResponse(messages, registry.specs())
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         // Stop pressed mid-call. Reporting it as a provider failure overwrote
                         // the CANCELLED state that stop() had just set.
@@ -343,7 +347,7 @@ class AgentRuntime(
                     // run on step 0, before the phone had done anything at all - but a model
                     // that fumbles one call is usually fine on the next one.
                     val malformed = response?.malformed.orEmpty()
-                    if (malformed.isNotEmpty() && nudges < MAX_TEXT_NUDGES) {
+                    if (malformed.isNotEmpty() && !deterministic && nudges < MAX_TEXT_NUDGES) {
                         nudges++
                         messages += AgentMessage(
                             MessageRole.User,
@@ -363,7 +367,7 @@ class AgentRuntime(
                     // A reply with no tool call is NOT a finished task: completion always
                     // arrives through the `finish` tool. Reporting the model's prose as a
                     // successful result was quietly wrong, so nudge it back on track first.
-                    if (nudges < MAX_TEXT_NUDGES) {
+                    if (!deterministic && nudges < MAX_TEXT_NUDGES) {
                         nudges++
                         // The screen goes with the nudge. Without it the model was told off
                         // for talking but given nothing to act on, so it talked again - which
@@ -392,7 +396,12 @@ class AgentRuntime(
 
                     finish(
                         taskId, prompt, startedAt, stepCount, appsUsed, steps, TaskState.FAILED,
-                        "The model never chose an action, so I stopped." +
+                        (if (steps.any { it.status == StepStatus.Done }) {
+                            "The model had nothing more it was sure enough to do after " +
+                                "\"${steps.last().label}\", so I stopped."
+                        } else {
+                            "The model never chose an action, so I stopped."
+                        }) +
                             (lastReply?.let { " Its last answer was: ${it.take(300)}" } ?: ""),
                     )
                     return

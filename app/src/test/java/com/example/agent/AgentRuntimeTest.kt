@@ -67,6 +67,20 @@ class AgentRuntimeTest {
         }
     }
 
+    private class DeterministicProvider : AIProvider {
+        override val id = "deterministic"
+        override val isDeterministic = true
+        var calls = 0
+
+        override suspend fun generateResponse(
+            messages: List<AgentMessage>,
+            tools: List<AgentToolSpec>,
+        ): AgentResponse {
+            calls++
+            return AgentResponse(message = "nothing to do", raw = "{}")
+        }
+    }
+
     private class BlockingProvider : AIProvider {
         override val id = "blocking"
         val entered = CompletableDeferred<Unit>()
@@ -167,6 +181,20 @@ class AgentRuntimeTest {
         assertThat(final.state).isEqualTo(TaskState.COMPLETED)
         assertThat(final.message).isEqualTo("all done")
         assertThat(rig.journal.records.map { it.state }).containsExactly(TaskState.COMPLETED)
+        scope.cancel()
+    }
+
+    @Test
+    fun `a deterministic model that returns no action is asked once, not nudged`() = runTest {
+        val scope = appScope()
+        val provider = DeterministicProvider()
+        val rig = Rig(scope, provider)
+
+        rig.runtime.start("do it")
+        val final = rig.runtime.progress.first { it.state.isTerminal }
+
+        assertThat(final.state).isEqualTo(TaskState.FAILED)
+        assertThat(provider.calls).isEqualTo(1)
         scope.cancel()
     }
 

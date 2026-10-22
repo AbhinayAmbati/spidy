@@ -25,6 +25,10 @@ class NeedleProvider(
 
     override val id: String = "needle"
 
+    // The engine is reset every turn and sees only the task, history and screen, so a retry
+    // nudge never reaches it and the same input gives the same answer.
+    override val isDeterministic: Boolean = true
+
     private val gate = Mutex()
     private var startedWith: String? = null
 
