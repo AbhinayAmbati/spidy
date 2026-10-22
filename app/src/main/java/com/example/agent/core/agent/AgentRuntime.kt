@@ -4,6 +4,8 @@ import com.example.agent.automation.tools.ToolRegistry
 import com.example.agent.core.ai.AIProvider
 import com.example.agent.core.ai.AgentJson
 import com.example.agent.core.control.AgentHalt
+import com.example.agent.core.intent.IntentRuntime
+import com.example.agent.core.intent.PermissionRequest
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.domain.model.ActionTarget
 import com.example.agent.domain.model.AwaitingKind
@@ -36,7 +38,13 @@ import java.util.UUID
 import kotlin.coroutines.coroutineContext
 
 /**
- * The agent loop.
+ * The agent loop, and the one door the rest of the app starts tasks through.
+ *
+ * By default a sentence goes to [intents] (router, guard, confirm, executor) and this loop is
+ * not used. The loop runs only for a replayed routine, or when [fallbackLoopEnabled] is set
+ * or no [intents] runtime was supplied.
+ *
+ * The loop itself:
  *
  *   OBSERVE -> PLAN -> SELECT TOOL -> VALIDATE -> EXECUTE -> OBSERVE -> ...
  *
@@ -52,7 +60,11 @@ class AgentRuntime(
     private val journal: TaskJournal,
     private val clock: AgentClock,
     private val scope: CoroutineScope,
+    private val intents: IntentRuntime? = null,
+    private val fallbackLoopEnabled: Boolean = false,
 ) {
+
+    private val useIntents: Boolean get() = intents != null && !fallbackLoopEnabled
 
     private val _progress = MutableStateFlow(
         TaskProgress(
@@ -74,12 +86,31 @@ class AgentRuntime(
     private var question: CompletableDeferred<String>? = null
     private var pauseGate: CompletableDeferred<Unit>? = null
 
-    val isRunning: Boolean get() = job?.isActive == true
+    val isRunning: Boolean get() = job?.isActive == true || intents?.isRunning == true
+
+    /** True while the loop is running, the only mode that can be paused. */
+    val canPause: Boolean get() = job?.isActive == true
+
+    /** Set while an intent task waits for the user to answer a permission prompt. */
+    val permissionRequest: StateFlow<PermissionRequest?> =
+        intents?.permissionRequest ?: MutableStateFlow<PermissionRequest?>(null).asStateFlow()
 
     private var taskStartedAtMillis: Long = 0L
 
     /** When the current task began, on the clock the touch gate compares against. */
-    val startedAtMillis: Long get() = taskStartedAtMillis
+    val startedAtMillis: Long
+        get() = if (intents != null && intents.isRunning) intents.startedAtMillis else taskStartedAtMillis
+
+    init {
+        // One progress stream for the whole app: the intent runtime's states are mirrored here.
+        if (intents != null) {
+            scope.launch {
+                intents.progress.collect { next ->
+                    if (next.taskId.isNotEmpty()) _progress.value = next
+                }
+            }
+        }
+    }
 
     /** Actions of the most recent completed task, so it can be saved as a routine. */
     @Volatile
@@ -87,6 +118,10 @@ class AgentRuntime(
 
     fun start(prompt: String) {
         if (isRunning) return
+        if (useIntents) {
+            intents?.start(prompt)
+            return
+        }
         taskStartedAtMillis = clock.uptimeMillis()
         AgentHalt.clear()
         job = scope.launch { runTask(prompt, routine = null) }
@@ -118,6 +153,10 @@ class AgentRuntime(
      * Cancelling the job alone left launches and gestures running.
      */
     fun stop(reason: String = STOPPED_BY_USER) {
+        if (intents != null && intents.isRunning) {
+            intents.stop(reason)
+            return
+        }
         AgentHalt.request()
         job?.cancel()
         job = null
@@ -133,7 +172,7 @@ class AgentRuntime(
 
     /** Pauses between steps. Safe to call when nothing is running. */
     fun pause() {
-        if (!isRunning || _paused.value) return
+        if (!canPause || _paused.value) return
         // The gate first: awaitResumeIfPaused reads the flag and then awaits the gate, so
         // the other order let a pause slip through with no gate to wait on.
         pauseGate = CompletableDeferred()
@@ -152,6 +191,12 @@ class AgentRuntime(
     /** Called by the confirmation sheet. */
     fun resolveConfirmation(allow: Boolean) {
         confirmation?.complete(allow)
+        intents?.resolveConfirmation(allow)
+    }
+
+    /** Called by the task screen with the user's answer to [permissionRequest]. */
+    fun resolvePermission(granted: Boolean) {
+        intents?.resolvePermission(granted)
     }
 
     /** Called when the agent asked the user a question. */

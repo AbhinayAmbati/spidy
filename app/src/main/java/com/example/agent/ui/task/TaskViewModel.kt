@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.agent.automation.AgentForegroundService
 import com.example.agent.core.agent.AgentRuntime
 import com.example.agent.core.ai.AgentJson
+import com.example.agent.core.intent.PermissionRequest
 import com.example.agent.data.repository.RoutineRepository
 import com.example.agent.domain.model.AgentAction
 import com.example.agent.domain.model.Routine
@@ -29,6 +30,17 @@ class TaskViewModel @Inject constructor(
 
     val progress: StateFlow<TaskProgress> = runtime.progress
     val paused: StateFlow<Boolean> = runtime.paused
+
+    /** A permission the running task needs the user to grant, or null. */
+    val permissionRequest: StateFlow<PermissionRequest?> = runtime.permissionRequest
+
+    /** Only the old loop can be paused; an intent task is over in a moment. */
+    fun canPause(): Boolean = runtime.canPause
+
+    /** Only a loop run leaves actions to replay; an intent task has none to save. */
+    fun canSaveRoutine(): Boolean = runtime.lastSuccessfulActions().isNotEmpty()
+
+    fun permissionResult(granted: Boolean) = runtime.resolvePermission(granted)
 
     private val _routineSaved = MutableStateFlow(false)
     val routineSaved: StateFlow<Boolean> = _routineSaved.asStateFlow()
