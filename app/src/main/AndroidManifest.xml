@@ -45,6 +45,11 @@
         android:theme="@style/Theme.Spidey"
         tools:targetApi="34">
 
+        <!-- Managed configuration schema, so an enterprise mobility manager can configure Spidey. -->
+        <meta-data
+            android:name="android.content.APP_RESTRICTIONS"
+            android:resource="@xml/app_restrictions" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
