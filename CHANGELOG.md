@@ -6,17 +6,17 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- Fully on-device inference with Cactus Needle 3, downloaded on first launch with resume,
-  SHA-256 verification and a metered-network check; JNI bridge to the Needle engine.
+- Fully on-device inference with the Spidey model (fine-tuned from Cactus Needle 3), downloaded on first launch with resume,
+  SHA-256 verification and a metered-network check; JNI bridge to the vendor engine.
 - Whistle speech-to-text model download and status in Settings.
 - Redesigned chat-style interface: home, task, history, routines and settings screens.
 - GitHub Actions workflow that builds an installable APK (`Release APK`).
-- A feasibility spike (`tools/needle_spike/`) for measuring Needle against Spidey's tools.
+- A feasibility spike (`tools/spidey_eval/`) for measuring accuracy on a phone.
 
 ### Changed
 - The agent runtime takes ports (model source, screen, journal, clock) and the loop guards
   live in `LoopGuard`, so the loop is unit-testable with fakes.
-- Needle is offered at most five tools per turn, and only the task on its first turn.
+- The model is offered at most five tools per turn.
 - Removed the provider and model selection screens from the UI.
 
 ### Fixed

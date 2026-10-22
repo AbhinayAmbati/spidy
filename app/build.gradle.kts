@@ -24,8 +24,8 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
-    // On-device inference (Cactus Needle). The native bridge is only built once the engine has
-    // been fetched with tools/fetch_needle_engine.py; without it the app builds as before and
+    // On-device inference (the Spidey model on the vendor engine). The native bridge is only built once the engine has
+    // been fetched with tools/fetch_engine.py; without it the app builds as before and
     // the on-device provider reports itself unavailable.
     if (file("src/main/cpp/engine/libneedle.a").exists()) {
         defaultConfig {

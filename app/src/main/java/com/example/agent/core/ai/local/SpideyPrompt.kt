@@ -9,14 +9,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * Turns the agent's conversation into what Needle takes: a short system prompt, a tool list,
+ * Turns the agent's conversation into what Spidey takes: a short system prompt, a tool list,
  * and one self-contained input per turn.
  *
- * Needle is a tool-calling model with a small context, not a chat model, and the tool schemas
+ * Spidey is a tool-calling model with a small context, not a chat model, and the tool schemas
  * share that context. So the input is the task, the last few results and a capped listing of
  * the current screen - never the whole history. Pure, so it is unit-testable.
  */
-object NeedlePrompt {
+object SpideyPrompt {
 
     const val MAX_HISTORY = 5
     const val MAX_SCREEN_LINES = 40
@@ -30,7 +30,7 @@ object NeedlePrompt {
         "Pick the tool that moves the task forward, and fill every argument from the task " +
         "and the screen. Call finish when the task is done."
 
-    // Needle is built for a handful of tools; past 5 it switches to per-turn retrieval, which
+    // Spidey is built for a handful of tools; past 5 it switches to per-turn retrieval, which
     // needs an index we do not ship and which picked arguments from nowhere on a real device.
     private val OPENING_TOOLS = listOf("open_app", "launch_url", "read_screen", "press_home", "finish")
     private val WORKING_TOOLS = listOf("click", "type_text", "scroll", "press_back", "finish")
@@ -100,7 +100,7 @@ object NeedlePrompt {
 
     private fun screenOf(messages: List<AgentMessage>): String {
         // Tool results only: the runtime's retry nudges are user messages that also quote the
-        // screen, wrapped in instructions Needle cannot use.
+        // screen, wrapped in instructions Spidey cannot use.
         val latest = messages.lastOrNull { it.role == MessageRole.Tool && it.content.contains(OBSERVATION_MARKER) }
         val listing = when {
             latest != null -> latest.content.substringAfter(OBSERVATION_MARKER)

@@ -7,9 +7,9 @@ following third-party components. Check the linked sources for the authoritative
 
 | Component | Use | Source |
 | --- | --- | --- |
-| Needle 3 (`needle3.cact`) | Tool-calling model, downloaded on first launch | https://huggingface.co/Cactus-Compute/needle3 |
+| Spidey (`spidey.cact`) | Intent model fine-tuned by this project from Needle 3, downloaded on first launch | https://huggingface.co/abhinayambati/spidey (base: https://huggingface.co/Cactus-Compute/needle3) |
 | Whistle (`whistle.cact`) | Speech-to-text model, downloaded on first launch | https://huggingface.co/Cactus-Compute/whistle |
-| Needle engine (`libneedle.a`, `needle.h`) | Native inference engine linked into the app | https://github.com/cactus-compute/needle |
+| Inference engine (`libneedle.a`, `needle.h`) | Native inference engine linked into the app | https://github.com/cactus-compute/needle |
 
 The Needle repository states that it is under the Apache-2.0 licence. The model weights are
 not bundled in the APK. Their licence terms are on the model cards above and have not been

@@ -10,11 +10,11 @@ Setup (once):
   2. Connect the phone and accept the debugging prompt; `adb devices` must list it.
 
 Run:
-    python tools/needle_spike/run_spike.py
+    python tools/spidey_eval/run_eval.py
 
 It downloads the runner and the model (about 37 MB) on the first run, verifies them against
-pinned SHA-256 hashes, pushes them to /data/local/tmp/needle_spike on the phone, and writes
-needle_spike_results.json next to this file. Nothing is installed on the phone.
+pinned SHA-256 hashes, pushes them to /data/local/tmp/spidey_eval on the phone, and writes
+results.json next to this file. Nothing is installed on the phone.
 
 Every case is a fresh process, so the latency includes loading the model. That is slower than
 the app will be (it loads once); read the per-case times as an upper bound.
@@ -32,7 +32,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "cache")
-REMOTE = "/data/local/tmp/needle_spike"
+REMOTE = "/data/local/tmp/spidey_eval"
 BASE = "https://huggingface.co/Cactus-Compute/needle3/resolve/main/"
 
 # name -> (path in the repo, size, sha256)
@@ -229,9 +229,9 @@ def main():
               f"whole sequence {stats['whole_sequence_correct']}/{stats['cases']}, "
               f"median {stats['median_seconds']}s")
 
-    with open(os.path.join(HERE, "needle_spike_results.json"), "w", encoding="utf-8") as handle:
+    with open(os.path.join(HERE, "results.json"), "w", encoding="utf-8") as handle:
         json.dump({"summary": summary, "results": results}, handle, indent=1, ensure_ascii=False)
-    print("full results: tools/needle_spike/needle_spike_results.json")
+    print("full results: tools/spidey_eval/results.json")
 
 
 if __name__ == "__main__":

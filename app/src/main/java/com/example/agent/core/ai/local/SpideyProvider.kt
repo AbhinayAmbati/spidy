@@ -17,13 +17,13 @@ import kotlinx.coroutines.withContext
  * the current screen. The engine allows one call at a time, so calls queue on [gate]. A call
  * in flight cannot be interrupted, so Stop takes effect when it returns.
  */
-class NeedleProvider(
+class SpideyProvider(
     private val engine: LocalToolEngine,
     private val minConfidence: Double = 0.0,
     private val maxNewTokens: Int = DEFAULT_MAX_NEW_TOKENS,
 ) : AIProvider {
 
-    override val id: String = "needle"
+    override val id: String = "spidey"
 
     // The engine is reset every turn and sees only the task, history and screen, so a retry
     // nudge never reaches it and the same input gives the same answer.
@@ -38,13 +38,13 @@ class NeedleProvider(
     ): AgentResponse = gate.withLock {
         withContext(Dispatchers.Default) {
             try {
-                val toolsJson = NeedlePrompt.toolsJson(NeedlePrompt.toolsFor(messages, tools))
+                val toolsJson = SpideyPrompt.toolsJson(SpideyPrompt.toolsFor(messages, tools))
                 if (toolsJson != startedWith) {
-                    engine.start(NeedlePrompt.SYSTEM_PROMPT, toolsJson)
+                    engine.start(SpideyPrompt.SYSTEM_PROMPT, toolsJson)
                     startedWith = toolsJson
                 }
                 engine.reset()
-                NeedleResponseParser.parse(engine.complete(NeedlePrompt.input(messages), maxNewTokens), minConfidence)
+                SpideyResponseParser.parse(engine.complete(SpideyPrompt.input(messages), maxNewTokens), minConfidence)
             } catch (failure: LocalEngineException) {
                 throw AIProviderException(AIProviderException.Kind.Unknown, failure.message ?: "On-device model failed", failure)
             }

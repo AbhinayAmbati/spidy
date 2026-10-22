@@ -1,21 +1,21 @@
 package com.example.agent.core.ai.local
 
 /**
- * The JNI surface of the Cactus Needle engine (app/src/main/cpp/needle_jni.cpp).
+ * The JNI surface of the Cactus Spidey engine (app/src/main/cpp/needle_jni.cpp).
  *
  * Strings cross as UTF-8 byte arrays so characters outside the BMP survive. The engine holds
  * one process-global, non-thread-safe model per kind, so nothing here may be called
- * concurrently: [NativeNeedleEngine] serialises access.
+ * concurrently: [NativeSpideyEngine] serialises access.
  *
  * Every function returns a negative number (or null) on failure; [nativeLastError] then says
  * why. The native library is only built after tools/fetch_needle_engine.py has fetched the
  * engine, so [isAvailable] is false in a build without it.
  */
-internal object NeedleNative {
+internal object SpideyNative {
 
     val isAvailable: Boolean by lazy {
         try {
-            System.loadLibrary("spidey_needle")
+            System.loadLibrary("spidey_engine")
             true
         } catch (missing: UnsatisfiedLinkError) {
             false
@@ -24,7 +24,7 @@ internal object NeedleNative {
 
     @JvmStatic external fun nativeLoad(path: ByteArray): Int
 
-    /** Bit set of the models loaded: 1 for text (Needle), 2 for speech (Whistle). */
+    /** Bit set of the models loaded: 1 for text (Spidey), 2 for speech (Whistle). */
     @JvmStatic external fun nativeModels(): Int
 
     @JvmStatic external fun nativeLastError(): ByteArray

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Fetches the Cactus Needle engine (libneedle.a + needle.h) for the Android build.
+"""Fetches the vendor inference engine (libneedle.a + needle.h, Cactus Compute) that runs spidey.cact.
 
 The engine is not committed. Run this once before building with on-device inference:
 
-    python tools/fetch_needle_engine.py
+    python tools/fetch_engine.py
 
 Each file is checked against a pinned SHA-256, so a changed upstream file fails the build
 instead of silently entering the app. To update the engine, re-read the files on
 https://huggingface.co/Cactus-Compute/needle3 and change the pins together with the change.
 
-The model weights (needle3.cact, whistle.cact) are NOT fetched here: the app downloads them
+The model weights (spidey.cact, whistle.cact) are NOT fetched here: the app downloads them
 on first launch.
 """
 

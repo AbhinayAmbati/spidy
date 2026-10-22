@@ -5,7 +5,7 @@ import com.example.agent.core.ai.local.LocalToolEngine
 import com.example.agent.core.ai.local.ModelDownloader
 import com.example.agent.core.ai.local.ModelSpec
 import com.example.agent.core.ai.local.ModelStatus
-import com.example.agent.core.ai.local.NeedleProvider
+import com.example.agent.core.ai.local.SpideyProvider
 import com.example.agent.core.ai.local.OnDeviceModelManager
 import com.example.agent.core.ai.local.RangeSource
 import com.example.agent.core.ai.local.RangeStream
@@ -34,12 +34,12 @@ class OnDeviceModelManagerTest {
 
     private val content = ByteArray(10_000) { (it * 7).toByte() }
 
-    private val needle = ModelSpec(
-        id = "n", displayName = "Needle", fileName = "n.cact", url = "https://example.invalid/n",
+    private val spidey = ModelSpec(
+        id = "n", displayName = "Spidey", fileName = "n.cact", url = "https://example.invalid/n",
         sizeBytes = content.size.toLong(),
         sha256 = MessageDigest.getInstance("SHA-256").digest(content).joinToString("") { "%02x".format(it) },
     )
-    private val whistle = needle.copy(id = "w", displayName = "Whistle", fileName = "w.cact")
+    private val whistle = spidey.copy(id = "w", displayName = "Whistle", fileName = "w.cact")
 
     private class Engine : LocalToolEngine {
         override fun start(systemPrompt: String, toolsJson: String) = Unit
@@ -61,7 +61,7 @@ class OnDeviceModelManagerTest {
             scope = scope,
             isMetered = { metered },
             engineFor = { Engine() },
-            needleSpec = needle,
+            spideySpec = spidey,
             whistleSpec = whistle,
         )
         return manager to scope
@@ -73,20 +73,20 @@ class OnDeviceModelManagerTest {
 
         val (manager, scope) = newManager(offline)
 
-        assertThat(manager.needle.value).isEqualTo(ModelStatus.Ready)
+        assertThat(manager.spidey.value).isEqualTo(ModelStatus.Ready)
         assertThat(manager.whistle.value).isEqualTo(ModelStatus.NotDownloaded)
         scope.cancel()
     }
 
     @Test
-    fun `starting on an unmetered connection downloads Needle and makes it usable`() = runTest {
+    fun `starting on an unmetered connection downloads Spidey and makes it usable`() = runTest {
         val (manager, scope) = newManager(serving)
 
         manager.startIfAllowed()
         advanceUntilIdle()
 
-        assertThat(manager.needle.value).isEqualTo(ModelStatus.Ready)
-        assertThat(manager.provider()).isInstanceOf(NeedleProvider::class.java)
+        assertThat(manager.spidey.value).isEqualTo(ModelStatus.Ready)
+        assertThat(manager.provider()).isInstanceOf(SpideyProvider::class.java)
         assertThat(manager.whistle.value).isEqualTo(ModelStatus.NotDownloaded)
         scope.cancel()
     }
@@ -98,7 +98,7 @@ class OnDeviceModelManagerTest {
         manager.startIfAllowed()
         advanceUntilIdle()
 
-        assertThat(manager.needle.value).isEqualTo(ModelStatus.NotDownloaded)
+        assertThat(manager.spidey.value).isEqualTo(ModelStatus.NotDownloaded)
         scope.cancel()
     }
 
@@ -106,10 +106,10 @@ class OnDeviceModelManagerTest {
     fun `asking for the download works even on a metered connection`() = runTest {
         val (manager, scope) = newManager(serving, metered = true)
 
-        manager.downloadNeedle()
+        manager.downloadSpidey()
         advanceUntilIdle()
 
-        assertThat(manager.needle.value).isEqualTo(ModelStatus.Ready)
+        assertThat(manager.spidey.value).isEqualTo(ModelStatus.Ready)
         scope.cancel()
     }
 
@@ -117,10 +117,10 @@ class OnDeviceModelManagerTest {
     fun `a failed download reports why and the model is not usable`() = runTest {
         val (manager, scope) = newManager(offline)
 
-        manager.downloadNeedle()
+        manager.downloadSpidey()
         advanceUntilIdle()
 
-        val status = manager.needle.value
+        val status = manager.spidey.value
         assertThat(status).isInstanceOf(ModelStatus.Failed::class.java)
         assertThat((status as ModelStatus.Failed).message).contains("no network")
         val failure = runCatching { manager.provider() }.exceptionOrNull()

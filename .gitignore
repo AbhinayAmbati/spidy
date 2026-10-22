@@ -20,9 +20,9 @@ keystore.properties
 *.jks
 release.keystore
 
-# Cactus Needle engine, fetched by tools/fetch_needle_engine.py
+# Vendor inference engine (Cactus), fetched by tools/fetch_engine.py
 app/src/main/cpp/engine/
 
-# Needle spike downloads and results
-tools/needle_spike/cache/
-tools/needle_spike/needle_spike_results.json
+# Spidey eval downloads and results
+tools/spidey_eval/cache/
+tools/spidey_eval/results.json

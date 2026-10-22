@@ -66,7 +66,7 @@ private data class SettingsUiState(
     val overlayAllowed: Boolean,
     val accessibilityStuck: Boolean,
     val permissions: PermissionStatus,
-    val needle: ModelStatus,
+    val spidey: ModelStatus,
     val whistle: ModelStatus,
 )
 
@@ -84,7 +84,7 @@ fun SettingsScreen(
     val overlayAllowed by viewModel.overlayAllowed.collectAsStateWithLifecycle()
     val accessibilityStuck by viewModel.accessibilityStuck.collectAsStateWithLifecycle()
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
-    val needle by viewModel.needleStatus.collectAsStateWithLifecycle()
+    val spidey by viewModel.spideyStatus.collectAsStateWithLifecycle()
     val whistle by viewModel.whistleStatus.collectAsStateWithLifecycle()
 
     // Overlay permission, accessibility and notification access are all granted on *system*
@@ -109,7 +109,7 @@ fun SettingsScreen(
             overlayAllowed = overlayAllowed,
             accessibilityStuck = accessibilityStuck,
             permissions = permissions,
-            needle = needle,
+            spidey = spidey,
             whistle = whistle,
         ),
         versionName = BuildConfig.VERSION_NAME,
@@ -128,7 +128,7 @@ fun SettingsScreen(
         onOpenMemory = onOpenMemory,
         onOpenTerms = onOpenTerms,
         onOpenOnboarding = onOpenOnboarding,
-        onDownloadNeedle = viewModel::downloadNeedle,
+        onDownloadSpidey = viewModel::downloadSpidey,
         onDownloadWhistle = viewModel::downloadWhistle,
     )
 }
@@ -148,7 +148,7 @@ private fun SettingsContent(
     onOpenMemory: () -> Unit,
     onOpenTerms: () -> Unit,
     onOpenOnboarding: () -> Unit,
-    onDownloadNeedle: () -> Unit,
+    onDownloadSpidey: () -> Unit,
     onDownloadWhistle: () -> Unit,
 ) {
     var confirmClear by remember { mutableStateOf(false) }
@@ -166,9 +166,9 @@ private fun SettingsContent(
             ProfileHeader(versionName = versionName)
 
             OnDeviceModelSection(
-                needleStatus = state.needle,
+                spideyStatus = state.spidey,
                 whistleStatus = state.whistle,
-                onDownloadNeedle = onDownloadNeedle,
+                onDownloadSpidey = onDownloadSpidey,
                 onDownloadWhistle = onDownloadWhistle,
             )
 
@@ -355,7 +355,7 @@ private fun SettingsPreview() {
                     notificationListenerEnabled = false,
                     notificationsGranted = true,
                 ),
-                needle = ModelStatus.Ready,
+                spidey = ModelStatus.Ready,
                 whistle = ModelStatus.NotDownloaded,
             ),
             versionName = "1.0",
@@ -370,7 +370,7 @@ private fun SettingsPreview() {
             onOpenMemory = {},
             onOpenTerms = {},
             onOpenOnboarding = {},
-            onDownloadNeedle = {},
+            onDownloadSpidey = {},
             onDownloadWhistle = {},
         )
     }

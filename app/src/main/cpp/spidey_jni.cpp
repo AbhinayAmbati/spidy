@@ -1,4 +1,4 @@
-// JNI bridge to the Cactus Needle engine (engine/needle.h, linked from engine/libneedle.a).
+// JNI bridge to the vendor engine (engine/needle.h, linked from engine/libneedle.a; the model it runs is spidey.cact).
 //
 // The engine holds one process-global, non-thread-safe model per kind, so the Kotlin side
 // serialises every call. Strings cross the boundary as UTF-8 byte arrays, never as jstring:
@@ -72,7 +72,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM*, void*) {
 
 // Maps the .cact file and hands it to the engine. Returns the engine's result, or -1 when the
 // file cannot be mapped (the reason is then not in needle_last_error).
-JNIEXPORT jint JNICALL Java_com_example_agent_core_ai_local_NeedleNative_nativeLoad(
+JNIEXPORT jint JNICALL Java_com_example_agent_core_ai_local_SpideyNative_nativeLoad(
     JNIEnv* env, jclass, jbyteArray path) {
   Utf8Arg file(env, path);
   const int fd = open(file.get(), O_RDONLY);
@@ -100,18 +100,18 @@ JNIEXPORT jint JNICALL Java_com_example_agent_core_ai_local_NeedleNative_nativeL
   return result;
 }
 
-JNIEXPORT jint JNICALL Java_com_example_agent_core_ai_local_NeedleNative_nativeModels(
+JNIEXPORT jint JNICALL Java_com_example_agent_core_ai_local_SpideyNative_nativeModels(
     JNIEnv*, jclass) {
   return needle_models();
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_example_agent_core_ai_local_NeedleNative_nativeLastError(
+JNIEXPORT jbyteArray JNICALL Java_com_example_agent_core_ai_local_SpideyNative_nativeLastError(
     JNIEnv* env, jclass) {
   const char* error = needle_last_error();
   return toByteArray(env, error != nullptr ? error : "");
 }
 
-JNIEXPORT jint JNICALL Java_com_example_agent_core_ai_local_NeedleNative_nativeInit(
+JNIEXPORT jint JNICALL Java_com_example_agent_core_ai_local_SpideyNative_nativeInit(
     JNIEnv* env, jclass, jbyteArray systemPrompt, jbyteArray toolsJson, jbyteArray toolIndexPath) {
   Utf8Arg system(env, systemPrompt);
   Utf8Arg tools(env, toolsJson);
@@ -120,7 +120,7 @@ JNIEXPORT jint JNICALL Java_com_example_agent_core_ai_local_NeedleNative_nativeI
 }
 
 // Returns the engine's JSON answer, or null on failure (see nativeLastError).
-JNIEXPORT jbyteArray JNICALL Java_com_example_agent_core_ai_local_NeedleNative_nativeComplete(
+JNIEXPORT jbyteArray JNICALL Java_com_example_agent_core_ai_local_SpideyNative_nativeComplete(
     JNIEnv* env, jclass, jbyteArray input, jint maxNewTokens) {
   Utf8Arg text(env, input);
   std::vector<char> out(kOutCapacity, 0);
@@ -130,12 +130,12 @@ JNIEXPORT jbyteArray JNICALL Java_com_example_agent_core_ai_local_NeedleNative_n
   return toByteArray(env, out.data());
 }
 
-JNIEXPORT void JNICALL Java_com_example_agent_core_ai_local_NeedleNative_nativeReset(JNIEnv*, jclass) {
+JNIEXPORT void JNICALL Java_com_example_agent_core_ai_local_SpideyNative_nativeReset(JNIEnv*, jclass) {
   needle_reset();
 }
 
 // Transcribes 16 kHz mono float PCM. Returns the engine's JSON, or null on failure.
-JNIEXPORT jbyteArray JNICALL Java_com_example_agent_core_ai_local_NeedleNative_nativeTranscribe(
+JNIEXPORT jbyteArray JNICALL Java_com_example_agent_core_ai_local_SpideyNative_nativeTranscribe(
     JNIEnv* env, jclass, jfloatArray pcm, jbyteArray language, jbyteArray keywords) {
   const jsize samples = env->GetArrayLength(pcm);
   std::vector<float> audio(static_cast<size_t>(samples));

@@ -13,7 +13,7 @@ ready until the `Android CI` run is green.
 
 The workflow (`.github/workflows/android.yml`) runs, in order:
 
-1. `python3 tools/fetch_needle_engine.py` - downloads the pinned Needle engine into
+1. `python3 tools/fetch_engine.py` - downloads the pinned inference engine into
    `app/src/main/cpp/engine/` (git-ignored; see [docs/ON_DEVICE.md](docs/ON_DEVICE.md)).
 2. `python3 tools/check_imports.py app/src` and `python3 tools/check_symbols.py app/src` -
    fast checks for missing imports. Run these locally before pushing; they need only Python.
@@ -40,11 +40,11 @@ the `spidey-apk` artifact.
 ```
 app/src/main/java/com/example/agent/
   core/agent/        AgentRuntime, LoopGuard, ActionValidator, ContextCompactor
-  core/ai/           AIProvider seam, AgentActionCodec, provider/*, local/* (Needle, downloader)
+  core/ai/           AIProvider seam, AgentActionCodec, provider/*, local/* (Spidey model, downloader)
   automation/        accessibility service, screen observer, tools/*
   data/, domain/     persistence and models
   ui/                Compose screens and components
-app/src/main/cpp/    JNI bridge to the Needle engine
+app/src/main/cpp/    JNI bridge to the inference engine
 ```
 
 ## Adding a tool
@@ -58,7 +58,7 @@ app/src/main/cpp/    JNI bridge to the Needle engine
 5. Decide how risky it is in `ActionValidator`; anything that sends, pays, deletes or calls must
    require confirmation.
 6. Add tests. The on-device model sees at most five tools per turn
-   (`NeedlePrompt.toolsFor`), so a new tool also needs a decision about when it is offered.
+   (`SpideyPrompt.toolsFor`), so a new tool also needs a decision about when it is offered.
 
 ## Reporting problems
 

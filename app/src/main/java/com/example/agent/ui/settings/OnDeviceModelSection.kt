@@ -26,25 +26,25 @@ import com.example.agent.ui.theme.SpideyTheme
 import com.example.agent.ui.theme.spideyColors
 
 /**
- * The on-device models Spidey runs on: Needle 3 for tool calling and Whistle for speech to
+ * The on-device models Spidey runs on: Spidey for tool calling and Whistle for speech to
  * text, each with its download state, a progress line while it downloads and a Download or
  * Retry action when it is missing or failed.
  */
 @Composable
 fun OnDeviceModelSection(
-    needleStatus: ModelStatus,
+    spideyStatus: ModelStatus,
     whistleStatus: ModelStatus,
-    onDownloadNeedle: () -> Unit,
+    onDownloadSpidey: () -> Unit,
     onDownloadWhistle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
         SectionLabel(text = "On-device model")
         ModelRow(
-            name = "Needle 3",
+            name = "Spidey",
             role = "Tool calling",
-            status = needleStatus,
-            onDownload = onDownloadNeedle,
+            status = spideyStatus,
+            onDownload = onDownloadSpidey,
             leading = { IconBadge(icon = Icons.Outlined.Build) },
         )
         RowDivider(inset = true)
@@ -118,9 +118,9 @@ private fun statusColor(status: ModelStatus): Color = when (status) {
 private fun OnDeviceModelSectionPreview() {
     SpideyTheme {
         OnDeviceModelSection(
-            needleStatus = ModelStatus.Downloading(downloadedBytes = 12_000_000, totalBytes = 35_335_380),
+            spideyStatus = ModelStatus.Downloading(downloadedBytes = 12_000_000, totalBytes = 35_335_380),
             whistleStatus = ModelStatus.NotDownloaded,
-            onDownloadNeedle = {},
+            onDownloadSpidey = {},
             onDownloadWhistle = {},
         )
     }

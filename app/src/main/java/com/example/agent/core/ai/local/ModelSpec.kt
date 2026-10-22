@@ -11,21 +11,22 @@ data class ModelSpec(
 )
 
 /**
- * The models Spidey runs on, both Apache-2.0 from Cactus Compute on Hugging Face.
+ * The models Spidey runs on: its own fine-tuned intent model, and Cactus Compute's Whistle for
+ * speech to text.
  *
- * The hashes are pinned so a changed upstream file fails the download instead of entering the
- * app. To update a model, read the file's LFS size and SHA-256 on its Hugging Face page and
- * change the pins together.
+ * The hashes are pinned so a changed file fails the download instead of entering the app. To
+ * update a model, read the file's LFS size and SHA-256 on its Hugging Face page and change the
+ * pins together.
  */
 object OnDeviceModels {
 
-    val NEEDLE = ModelSpec(
-        id = "needle3",
-        displayName = "Needle 3",
-        fileName = "needle3.cact",
-        url = "https://huggingface.co/Cactus-Compute/needle3/resolve/main/needle3.cact",
-        sizeBytes = 35_335_380L,
-        sha256 = "c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38",
+    val SPIDEY = ModelSpec(
+        id = "spidey",
+        displayName = "Spidey",
+        fileName = "spidey.cact",
+        url = "https://huggingface.co/abhinayambati/spidey/resolve/main/spidey.cact",
+        sizeBytes = 63_437_076L,
+        sha256 = "5d94343f3cdf9e9009926d9fe6ba688d7c1eaa9857720243b10316dc1ecc54ff",
     )
 
     val WHISTLE = ModelSpec(

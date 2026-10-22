@@ -1,0 +1,87 @@
+[
+  {
+    "name": "open_app",
+    "description": "Open an installed app by name.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string",
+          "description": "App name as the user says it, lowercase, e.g. 'youtube'"
+        }
+      },
+      "required": [
+        "app"
+      ]
+    }
+  },
+  {
+    "name": "send_message",
+    "description": "Send a text message to a contact.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "contact": {
+          "type": "string",
+          "description": "Contact name as spoken"
+        },
+        "text": {
+          "type": "string",
+          "description": "Message body, exactly what the user wants to say"
+        }
+      },
+      "required": [
+        "contact",
+        "text"
+      ]
+    }
+  },
+  {
+    "name": "call_contact",
+    "description": "Place a phone call to a contact.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "contact": {
+          "type": "string",
+          "description": "Contact name as spoken"
+        }
+      },
+      "required": [
+        "contact"
+      ]
+    }
+  },
+  {
+    "name": "set_alarm",
+    "description": "Set an alarm for a time of day.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "time": {
+          "type": "string",
+          "description": "Time as the user says it, e.g. '6 am' or '7:30 pm'"
+        }
+      },
+      "required": [
+        "time"
+      ]
+    }
+  },
+  {
+    "name": "set_timer",
+    "description": "Start a countdown timer.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "minutes": {
+          "type": "integer",
+          "description": "Timer length in minutes"
+        }
+      },
+      "required": [
+        "minutes"
+      ]
+    }
+  }
+]

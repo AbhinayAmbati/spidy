@@ -4,9 +4,9 @@ import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentToolSpec
 import com.example.agent.core.ai.local.LocalEngineException
 import com.example.agent.core.ai.local.LocalToolEngine
-import com.example.agent.core.ai.local.NeedlePrompt
-import com.example.agent.core.ai.local.NeedleProvider
-import com.example.agent.core.ai.local.NeedleResponseParser
+import com.example.agent.core.ai.local.SpideyPrompt
+import com.example.agent.core.ai.local.SpideyProvider
+import com.example.agent.core.ai.local.SpideyResponseParser
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.MessageRole
 import com.example.agent.domain.model.ToolCall
@@ -16,7 +16,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
-class NeedleProviderTest {
+class SpideyProviderTest {
 
     private class FakeEngine(private val answers: ArrayDeque<String>) : LocalToolEngine {
         var starts = 0
@@ -56,7 +56,7 @@ class NeedleProviderTest {
 
     @Test
     fun `a function call becomes an action`() {
-        val response = NeedleResponseParser.parse(clickAnswer)
+        val response = SpideyResponseParser.parse(clickAnswer)
 
         assertThat(response.calls).hasSize(1)
         assertThat(response.calls.single().action.action).isEqualTo(ToolNames.CLICK)
@@ -67,12 +67,12 @@ class NeedleProviderTest {
     fun `arguments sent as a JSON string are accepted`() {
         val raw = """{"function_calls":[{"name":"click","arguments":"{\"target\":{\"text\":\"Wi-Fi\"}}"}],"confidence":0.9}"""
 
-        assertThat(NeedleResponseParser.parse(raw).calls.single().action.target?.text).isEqualTo("Wi-Fi")
+        assertThat(SpideyResponseParser.parse(raw).calls.single().action.target?.text).isEqualTo("Wi-Fi")
     }
 
     @Test
     fun `an empty call list becomes a reply with no actions`() {
-        val response = NeedleResponseParser.parse("""{"function_calls":[],"reasoning":"nothing fits","confidence":0.4}""")
+        val response = SpideyResponseParser.parse("""{"function_calls":[],"reasoning":"nothing fits","confidence":0.4}""")
 
         assertThat(response.calls).isEmpty()
         assertThat(response.message).isEqualTo("nothing fits")
@@ -80,7 +80,7 @@ class NeedleProviderTest {
 
     @Test
     fun `a call below the confidence floor is dropped`() {
-        val response = NeedleResponseParser.parse(clickAnswer, minConfidence = 0.95)
+        val response = SpideyResponseParser.parse(clickAnswer, minConfidence = 0.95)
 
         assertThat(response.calls).isEmpty()
         assertThat(response.message).contains("not confident")
@@ -88,7 +88,7 @@ class NeedleProviderTest {
 
     @Test
     fun `output that is not JSON is a parse failure`() {
-        val failure = assertThrows(AIProviderException::class.java) { NeedleResponseParser.parse("garbled") }
+        val failure = assertThrows(AIProviderException::class.java) { SpideyResponseParser.parse("garbled") }
 
         assertThat(failure.kind).isEqualTo(AIProviderException.Kind.Parse)
     }
@@ -97,7 +97,7 @@ class NeedleProviderTest {
 
     @Test
     fun `the first input is the task alone, without the screen or the system prompt`() {
-        val input = NeedlePrompt.input(conversation())
+        val input = SpideyPrompt.input(conversation())
 
         assertThat(input).contains("Task: open the settings")
         assertThat(input).doesNotContain("[k1]")
@@ -111,7 +111,7 @@ class NeedleProviderTest {
             AgentMessage(MessageRole.Tool, "Observation:\n[k9] \"Settings\" <TextView>", toolCallId = "c1", name = "click"),
         )
 
-        val input = NeedlePrompt.input(messages)
+        val input = SpideyPrompt.input(messages)
 
         assertThat(input).contains("Done so far:")
         assertThat(input).contains("click")
@@ -127,14 +127,14 @@ class NeedleProviderTest {
             AgentMessage(MessageRole.Tool, "Observation:\n$listing", toolCallId = "c1", name = "read_screen"),
         )
 
-        val lines = NeedlePrompt.input(messages).lines().count { it.startsWith("[k") }
+        val lines = SpideyPrompt.input(messages).lines().count { it.startsWith("[k") }
 
-        assertThat(lines).isEqualTo(NeedlePrompt.MAX_SCREEN_LINES)
+        assertThat(lines).isEqualTo(SpideyPrompt.MAX_SCREEN_LINES)
     }
 
     @Test
     fun `tools are described as name, description and parameters`() {
-        val json = NeedlePrompt.toolsJson(tools)
+        val json = SpideyPrompt.toolsJson(tools)
 
         assertThat(json).contains("\"name\":\"click\"")
         assertThat(json).contains("\"description\":\"Tap an element.\"")
@@ -148,8 +148,8 @@ class NeedleProviderTest {
             ToolNames.SCROLL, ToolNames.PRESS_BACK, ToolNames.PRESS_HOME, ToolNames.LAUNCH_URL, ToolNames.FINISH,
         ).map { AgentToolSpec(it, "d", """{"type":"object","properties":{}}""") }
 
-        val opening = NeedlePrompt.toolsFor(conversation(), all).map { it.name }
-        val working = NeedlePrompt.toolsFor(
+        val opening = SpideyPrompt.toolsFor(conversation(), all).map { it.name }
+        val working = SpideyPrompt.toolsFor(
             conversation() + AgentMessage(MessageRole.Tool, "Observation:\n[k1]", toolCallId = "c1", name = "open_app"),
             all,
         ).map { it.name }
@@ -167,7 +167,7 @@ class NeedleProviderTest {
     @Test
     fun `the engine is started once per tool set and reset before every turn`() = runTest {
         val engine = FakeEngine(ArrayDeque(listOf(clickAnswer, clickAnswer)))
-        val provider = NeedleProvider(engine)
+        val provider = SpideyProvider(engine)
 
         provider.generateResponse(conversation(), tools)
         provider.generateResponse(conversation(), tools)
@@ -179,7 +179,7 @@ class NeedleProviderTest {
     @Test
     fun `a different tool set restarts the engine`() = runTest {
         val engine = FakeEngine(ArrayDeque(listOf(clickAnswer, clickAnswer)))
-        val provider = NeedleProvider(engine)
+        val provider = SpideyProvider(engine)
 
         provider.generateResponse(conversation(), tools)
         provider.generateResponse(conversation(), tools.take(1))
@@ -190,7 +190,7 @@ class NeedleProviderTest {
     @Test
     fun `an engine failure surfaces as a provider error with the engine's reason`() = runTest {
         val engine = FakeEngine(ArrayDeque()).apply { failWith = "context too small" }
-        val provider = NeedleProvider(engine)
+        val provider = SpideyProvider(engine)
 
         val failure = runCatching { provider.generateResponse(conversation(), tools) }.exceptionOrNull()
 

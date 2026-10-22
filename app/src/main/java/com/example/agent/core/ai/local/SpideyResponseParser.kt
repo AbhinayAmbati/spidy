@@ -13,13 +13,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 
 /**
- * Reads the JSON object the Needle engine returns for one turn:
+ * Reads the JSON object the Spidey engine returns for one turn:
  *
  *   {"function_calls":[{"name":"click","arguments":{...}}],"reasoning":"...","confidence":0.94}
  *
  * Pure and free of Android types, so the behaviour is unit-testable.
  */
-object NeedleResponseParser {
+object SpideyResponseParser {
 
     /**
      * @param minConfidence calls the model is less sure of than this are dropped. The engine

@@ -32,11 +32,11 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
-    val needleStatus: StateFlow<ModelStatus> = models.needle
+    val spideyStatus: StateFlow<ModelStatus> = models.spidey
 
     val whistleStatus: StateFlow<ModelStatus> = models.whistle
 
-    fun downloadNeedle() = models.downloadNeedle()
+    fun downloadSpidey() = models.downloadSpidey()
 
     fun downloadWhistle() = models.downloadWhistle()
 

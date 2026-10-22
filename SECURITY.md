@@ -25,7 +25,7 @@ The design assumes the model driving it can be wrong or adversarial:
   wait for the user's approval.
 - Messaging and calling deep links are refused; screens marked `FLAG_SECURE` are not readable.
 - In on-device mode the model runs locally, so task text and screen contents are not sent to a
-  server. The Needle and Whistle models are downloaded over HTTPS and checked against a pinned
+  server. The Spidey and Whistle models are downloaded over HTTPS and checked against a pinned
   SHA-256 before use.
 - If a cloud provider is configured in a build that still has one, it receives a summarised
   screen listing and your task text; keys are stored with Android's encrypted preferences.

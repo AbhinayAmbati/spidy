@@ -1,39 +1,44 @@
-# On-device inference (Cactus Needle 3 and Whistle)
+# On-device inference (Spidey model and Whistle)
 
-Status: wired in. The agent runs on Needle 3 on the device, downloaded on first launch (Wi-Fi) or
-from Settings. How accurate it is for phone control is still to be measured on a real device
-(see "Feasibility spike").
+Spidey runs on its own fine-tuned model, `spidey.cact` (a Needle-architecture model tuned to turn
+one sentence into one of five intents). It is downloaded on first launch (Wi-Fi) or from Settings.
+Whistle (speech to text) is Cactus Compute's model, used as shipped.
 
 ## What is here
 
 | Piece | Where |
 |---|---|
-| JNI bridge over `needle.h` | `app/src/main/cpp/needle_jni.cpp`, `CMakeLists.txt` |
-| Kotlin binding | `core/ai/local/NeedleNative.kt`, `NativeNeedleEngine.kt` |
-| Provider (`AIProvider`) | `core/ai/local/NeedleProvider.kt` |
-| Prompt and response mapping | `NeedlePrompt.kt`, `NeedleResponseParser.kt` |
-| Engine fetch script | `tools/fetch_needle_engine.py` |
+| JNI bridge over the vendor `needle.h` | `app/src/main/cpp/spidey_jni.cpp`, `CMakeLists.txt` |
+| Kotlin binding | `core/ai/local/SpideyNative.kt`, `NativeSpideyEngine.kt` |
+| Provider (`AIProvider`) | `core/ai/local/SpideyProvider.kt` |
+| Prompt and response mapping | `SpideyPrompt.kt`, `SpideyResponseParser.kt` |
+| Engine fetch script | `tools/fetch_engine.py` |
+| Accuracy run on a phone | `tools/spidey_eval/run_eval.py` |
 
 ## Building with the engine
 
-The engine (`libneedle.a`, `needle.h`, android-arm64 only) is not committed.
+The inference engine (`libneedle.a`, `needle.h`, android-arm64 only) is vendor code from Cactus
+Compute that runs `.cact` models. It keeps its upstream file and function names (`needle_*`). It is
+not committed.
 
 ```sh
-python tools/fetch_needle_engine.py
+python tools/fetch_engine.py
 ```
 
 Both files are verified against pinned SHA-256 hashes. Once `app/src/main/cpp/engine/libneedle.a`
-exists, Gradle builds the native bridge (arm64-v8a, `c++_shared`); without it the app builds as
-before and `NeedleNative.isAvailable` is false. CI and the release workflow fetch the engine, so they compile the C++.
+exists, Gradle builds the native bridge `libspidey_engine.so` (arm64-v8a, `c++_shared`); without it
+the app builds as before and `SpideyNative.isAvailable` is false. CI and the release workflow fetch
+the engine, so they compile the C++.
 
-## Pinned artefacts (Hugging Face, Apache-2.0)
+## Pinned artefacts
 
 | File | Size | SHA-256 |
 |---|---|---|
-| `Cactus-Compute/needle3` `needle3.cact` | 35,335,380 B | `c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38` |
+| `abhinayambati/spidey` `spidey.cact` | 63,437,076 B | `5d94343f3cdf9e9009926d9fe6ba688d7c1eaa9857720243b10316dc1ecc54ff` |
 | `Cactus-Compute/whistle` `whistle.cact` | 16,919,407 B | `b6e02f048568ac5d01a2042556c658061e699acbc0aa2a1439f52f3d461dffeb` |
 
-The models are downloaded by the app on first launch, not bundled.
+The models are downloaded by the app on first launch, not bundled. The licence of `spidey.cact`
+must be stated on its Hugging Face page; it is derived from Needle 3 (Apache-2.0).
 
 ## How the engine behaves (from `needle.h`)
 
@@ -45,19 +50,3 @@ The models are downloaded by the app on first launch, not bundled.
 - `needle_complete` takes one text input and returns one JSON object. The provider resets the
   conversation before every turn and sends a self-contained input.
 - Telemetry is on by default in the engine; the bridge turns it off in `JNI_OnLoad`.
-
-## Feasibility spike (needs a phone)
-
-Needle 3 is built for single-turn requests such as "dim the living room to 30". Spidey asks for
-more: choosing an element on a screen listing, several steps in a row. Before building more:
-
-1. Fetch the engine, build a debug APK, and push `needle3.cact` to the app's files directory.
-2. Replay 20-30 recorded Spidey tasks (task text + screen listings) through `NeedleProvider`.
-3. Record per task: right first action, right whole sequence, latency, peak RAM, and whether
-   `needle_init` accepts all 16 tools or needs fewer.
-4. Decide: ship as the default, ship for simple tasks only (open an app, search, scroll), or
-   keep a cloud provider as an option.
-
-Things the spike must settle, because the docs do not: the exact `tools_json` shape the engine
-accepts (the provider sends `[{name, description, parameters}]`), and the response field names
-(the parser reads `function_calls`, `reasoning`, `confidence`).

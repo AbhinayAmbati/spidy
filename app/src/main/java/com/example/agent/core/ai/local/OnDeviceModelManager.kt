@@ -14,24 +14,24 @@ import java.io.File
 
 /**
  * Owns the on-device models: whether each is on the phone, the download that fetches it, and
- * the provider the agent loop talks to once Needle is ready.
+ * the provider the agent loop talks to once Spidey is ready.
  *
- * Downloads run one at a time on [scope], so they outlive any screen. Needle is fetched
+ * Downloads run one at a time on [scope], so they outlive any screen. Spidey is fetched
  * automatically on first launch unless the connection is metered; Whistle waits to be asked.
  */
 class OnDeviceModelManager(
     private val downloader: ModelDownloader,
     private val scope: CoroutineScope,
     private val isMetered: () -> Boolean,
-    private val engineFor: (File) -> LocalToolEngine = { NativeNeedleEngine(it) },
-    private val needleSpec: ModelSpec = OnDeviceModels.NEEDLE,
+    private val engineFor: (File) -> LocalToolEngine = { NativeSpideyEngine(it) },
+    private val spideySpec: ModelSpec = OnDeviceModels.SPIDEY,
     private val whistleSpec: ModelSpec = OnDeviceModels.WHISTLE,
 ) : ModelSource {
 
-    private val needleStatus = MutableStateFlow<ModelStatus>(ModelStatus.NotDownloaded)
+    private val spideyStatus = MutableStateFlow<ModelStatus>(ModelStatus.NotDownloaded)
     private val whistleStatus = MutableStateFlow<ModelStatus>(ModelStatus.NotDownloaded)
 
-    val needle: StateFlow<ModelStatus> = needleStatus.asStateFlow()
+    val spidey: StateFlow<ModelStatus> = spideyStatus.asStateFlow()
     val whistle: StateFlow<ModelStatus> = whistleStatus.asStateFlow()
 
     private var downloadJob: Job? = null
@@ -43,22 +43,22 @@ class OnDeviceModelManager(
 
     /** Re-reads what is on disk. A download in progress is left alone. */
     fun refresh() {
-        refresh(needleSpec, needleStatus)
+        refresh(spideySpec, spideyStatus)
         refresh(whistleSpec, whistleStatus)
     }
 
-    /** First-launch behaviour: fetch Needle on its own, but never over mobile data unasked. */
+    /** First-launch behaviour: fetch Spidey on its own, but never over mobile data unasked. */
     fun startIfAllowed() {
         refresh()
-        if (needleStatus.value is ModelStatus.NotDownloaded && !isMetered()) downloadNeedle()
+        if (spideyStatus.value is ModelStatus.NotDownloaded && !isMetered()) downloadSpidey()
     }
 
-    fun downloadNeedle() = download(needleSpec, needleStatus)
+    fun downloadSpidey() = download(spideySpec, spideyStatus)
 
     fun downloadWhistle() = download(whistleSpec, whistleStatus)
 
     override suspend fun provider(): AIProvider {
-        when (val status = needleStatus.value) {
+        when (val status = spideyStatus.value) {
             ModelStatus.Ready -> Unit
             is ModelStatus.Downloading -> throw AIProviderException(
                 AIProviderException.Kind.Unknown,
@@ -69,7 +69,7 @@ class OnDeviceModelManager(
                 "The on-device model has not been downloaded yet. Open Settings to download it.",
             )
         }
-        return provider ?: NeedleProvider(engineFor(downloader.fileFor(needleSpec))).also { provider = it }
+        return provider ?: SpideyProvider(engineFor(downloader.fileFor(spideySpec))).also { provider = it }
     }
 
     private fun refresh(spec: ModelSpec, status: MutableStateFlow<ModelStatus>) {

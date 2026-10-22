@@ -56,7 +56,7 @@ jobs:
       # The on-device engine (libneedle.a, needle.h) is not committed. Fetching it, verified
       # against pinned hashes, is what switches the native build on.
       - name: Fetch the on-device engine
-        run: python3 tools/fetch_needle_engine.py
+        run: python3 tools/fetch_engine.py
 
       - name: Check cross-package imports
         run: python3 tools/check_imports.py app/src
