@@ -9,52 +9,71 @@ needs your approval.
 It is not a chatbot in an app, and not an automation dashboard. The whole interface
 answers one question: **"What do you want me to do?"**
 
+Spidey runs **on the device**. Its default path uses `spidey.cact`, a small model fine-tuned
+from Cactus Needle 3, to turn one sentence into one of five intents (open an app, send a
+message, call a contact, set an alarm, set a timer). Every value the model produces is then
+checked against the phone's real apps and contacts, and sends and calls wait for your
+confirmation. No API key and no network are needed to run a task.
+
 **New here? Read [docs/USAGE.md](docs/USAGE.md)** — setup, how the agent works, how to
-phrase tasks, what each tool does, and what to do when a step fails.
+phrase tasks, what each tool does, and what to do when a step fails. (Parts of it still
+describe the older provider setup; see [Status](#status).)
 
 ---
 
 ## Status
 
-This repository contains the **foundation and MVP-1 runtime**: a complete, coherent
-architecture with real implementations for the AI layer, the accessibility layer, the
-tool system, the agent loop, and the full UI shell (Home, live task, history,
-settings, provider setup, onboarding).
+Early and under active development. Builds are produced by GitHub Actions; nothing in this
+repository has been compiled by hand on a developer machine, so treat each CI build as the
+source of truth.
 
 | Area | State |
 | --- | --- |
-| Gradle / project structure | Done |
-| Design system (black / white / brown, light + dark, spacing, type, shapes) | Done |
-| Typography: Inter (body/UI) + Instrument Serif (headings), bundled | Done |
-| Splash screen (black background, white cursive wordmark) | Done |
-| Home, Task, History, Task detail, Settings, Provider, Memory, Onboarding screens + navigation | Done |
-| AI provider abstraction (OpenAI-compatible, Anthropic, Gemini, OpenRouter, Custom) | Done |
-| BYOK with encrypted credential storage | Done |
-| AccessibilityService, controller, screen observer | Done |
-| Tool system + registry + action schema + validator | Done |
-| Agent runtime loop + task state machine + pause/resume + confirmation gate | Done |
-| Bounded conversation context (older screen dumps trimmed) | Done |
-| Room persistence (task history incl. per-step actions) + DataStore preferences | Done |
-| Long-term memory (learned app shortcuts) + Memory screen | Done |
-| Voice input (platform speech recognizer) | Done |
-| Foreground service + notifications | Done |
-| Reduced-motion support, headings, touch targets | Done |
-| Unit tests (parsing, validator, registry, state machine, memory, history codec) | Done |
-| Release signing config + GitHub Actions CI | Done |
-| Real-device verification across Chrome, Settings, YouTube, Gmail, messaging | Pending — needs a device |
-| Multi-step "compare prices" style planning quality | Iterating — depends on model |
+| On-device intent model (`spidey.cact`, five intents) + JNI bridge to the vendor engine | Done |
+| Model download on first launch (resume, SHA-256 check, metered-network check) | Done |
+| Intent runtime: router -> guard -> confirm gate -> Android intent executor | Done |
+| Name resolution against the phone's apps and contacts; spoken time parser | Done |
+| Audit trail, data export and delete-all, managed configuration | Done |
+| Whistle speech-to-text download and status in Settings | Done |
+| AccessibilityService agent loop (observe, act) and tool system | Done, used for screen-driven tasks |
+| Cloud providers (OpenAI, Anthropic, Gemini, OpenRouter, custom) in code | Present; the provider screens were removed from the UI |
+| Chat-style UI: Home, Task, History, Routines, Settings, Onboarding | Done |
+| CI: build, unit tests, lint baseline, coverage, supply-chain and model-pin checks | Done |
+| Signed release APK from a `v*` tag | Done ([docs/RELEASING.md](docs/RELEASING.md)) |
+| Measured accuracy and latency of the model on a phone | **Pending** |
+| Multi-step, screen-reading tasks | Iterating; the model does not see the screen |
 
-> **Build note:** this code was authored and reviewed in an environment without the
-> Android SDK or a JDK, so it has **not been compiled here**. It is written to compile
-> against AGP 8.5.2 / Kotlin 1.9.24 / Compose BOM 2024.06.00 — open it in Android
-> Studio and run `./gradlew assembleDebug`. Nothing is faked: where a feature is not
-> built yet it is marked `TODO` in the code rather than stubbed to look finished.
+### What the model can and cannot do
+
+`spidey.cact` reads one sentence and returns calls to five tools. It does not see the
+screen, and it is English only. It is a fast path for simple commands, not a general planner.
+
+The reported figures (81.4% on a hard held-out set, 84.6% with name checks, 98.7% on a
+hand-written set) reproduce arithmetically but come from the Python runtime on a server,
+not from a phone, and the 98.7% set was also used to pick the model. Read
+[docs/EVALUATION.md](docs/EVALUATION.md) before quoting any of them.
+
+Known limits: one-sentence chains of several commands are weak, spoken durations ("half an
+hour") are not trained, and message-body edges still cause wrong actions, which is why every
+send and call needs confirmation.
 
 ---
 
 ## Architecture
 
 ```
+Default path (one sentence, on device):
+
+User request
+     |
+IntentRuntime  (core/intent)  ->  SpideyRouter  ->  spidey.cact (JNI)
+     |
+IntentGuard  (checks names against real apps and contacts)  ->  Confirm gate
+     |
+AndroidActionExecutor  (core/actions: Intents, PackageManager)
+
+Screen-driven path (AccessibilityService):
+
 User request
      |
 Agent Runtime  (core/agent/AgentRuntime)
@@ -84,7 +103,10 @@ by `TaskProgress.MAX_AGENT_STEPS` (30).
 ```
 com.example.agent
 ├── core
-│   ├── ai            AIProvider, AgentTool, factory, Json, provider/*
+│   ├── ai            AIProvider, AgentTool, factory, Json, provider/*, local/* (Spidey engine)
+│   ├── intent        IntentRuntime, SpideyRouter, guard, app/contact resolvers, TimeParser
+│   ├── actions       AndroidActionExecutor, ActionLauncher
+│   ├── audit         audit events, sanitizer, export, managed config
 │   ├── agent         AgentRuntime, ActionValidator, PromptBuilder
 │   ├── security      SecureCredentialStore (EncryptedSharedPreferences)
 │   ├── permissions   PermissionUtils
@@ -110,9 +132,27 @@ com.example.agent
 
 ---
 
-## The AI layer (BYOK)
+## The AI layer
 
-All providers implement one interface, so the runtime never depends on a vendor:
+**On-device (default).** `core/ai/local` wraps the vendor inference engine (`libneedle.a`,
+`needle.h`, arm64-v8a, Apache-2.0 upstream) behind a JNI bridge. `spidey.cact`
+(63,437,076 bytes) is downloaded on first launch from Hugging Face, checked against a pinned
+SHA-256, and memory-mapped. It was fine-tuned with no system prompt, so the input is the raw
+sentence plus exactly five tools: `open_app(app)`, `send_message(contact, text)`,
+`call_contact(contact)`, `set_alarm(time)`, `set_timer(minutes)`. Details, pins and engine
+behaviour are in [docs/ON_DEVICE.md](docs/ON_DEVICE.md).
+
+Fetch the engine before building with native inference (it is verified against pinned hashes
+and not committed):
+
+```bash
+python tools/fetch_engine.py
+```
+
+Without it the app still builds and `SpideyNative.isAvailable` is false.
+
+**Cloud providers (BYOK).** All providers implement one interface, so the runtime never
+depends on a vendor:
 
 ```kotlin
 interface AIProvider {
@@ -123,16 +163,11 @@ interface AIProvider {
 }
 ```
 
-Supported out of the box: **OpenAI**, **Anthropic**, **Google Gemini**, **Sarvam AI**,
-**OpenRouter**, and any **custom OpenAI-compatible** endpoint. Adding a provider is one
-`when` branch in `AIProviderFactory` plus, at most, one adapter class.
-
-Sarvam AI speaks the same request/response shape as OpenAI but prefers the
-`api-subscription-key` header over `Authorization: Bearer`, so the OpenAI-compatible
-adapter takes the auth header and prefix as parameters rather than assuming them.
+OpenAI, Anthropic, Google Gemini, Sarvam AI, OpenRouter and custom OpenAI-compatible
+endpoints are implemented, but the provider and model screens are no longer in the UI.
 
 The model is given tools via native function/tool calling and must return a structured
-`AgentAction` — never Kotlin, shell, or any executable payload.
+action — never Kotlin, shell, or any executable payload.
 
 ---
 
@@ -153,10 +188,14 @@ heuristic plus per-tool risk — whether the user must confirm first.
 ## Safety and privacy
 
 - The model is treated as **untrusted input**. It can only influence the device through
-  the fixed tool surface.
+  the fixed tool surface, and `IntentGuard` rejects names that are not on the phone and
+  values that are not in your request.
 - **Sensitive actions** (send, pay, delete, call, install, confirm, …) pause and require
   an explicit Allow from a confirmation sheet.
-- **API keys** are stored only in `EncryptedSharedPreferences` (Android Keystore), are
+- Inference is on-device by default: your sentence does not leave the phone.
+- An **audit trail** records what ran, with a sanitizer; Settings can export or delete all
+  data. See [docs/SECURITY.md](docs/SECURITY.md).
+- **API keys** (cloud providers only) are stored only in `EncryptedSharedPreferences` (Android Keystore), are
   masked in the UI, are never logged, and are sent only to the chosen provider.
 - The screen is summarised into a small list of labelled, interactive elements before
   anything is shared with a model — raw accessibility trees are never dumped.
@@ -172,7 +211,9 @@ heuristic plus per-tool risk — whether the user must confirm first.
 - **Accessibility** — required. Lets the agent see and control supported interfaces.
 - **Notifications** — shows progress while a task runs; optional notification access
   additionally enables the `get_notifications` tool.
-- **Internet** — to reach the AI provider you configured.
+- **Internet** — to download the models once, and to reach a cloud provider if you use one.
+- **Contacts** — requested at run time so a name in your sentence can be matched to a real
+  contact.
 
 The onboarding and settings screens explain each one and never trick the user.
 
@@ -185,6 +226,8 @@ The onboarding and settings screens explain each one and never trick the user.
 ./gradlew assembleDebug     # requires a JDK 17 and the Android SDK
 ./gradlew test              # unit tests
 ```
+
+Run `python tools/fetch_engine.py` first if you want the native on-device engine.
 
 `minSdk 26`, `targetSdk 34`, `compileSdk 34`.
 
@@ -233,10 +276,13 @@ back to the debug key so the project still builds.
 
 ## Roadmap
 
-1. On-device screenshots, only when a provider explicitly needs them.
-2. Broaden automation coverage and add device tests across Chrome, Settings,
+1. Measure accuracy, latency and RAM of `spidey.cact` on real phones
+   (`tools/spidey_eval/run_eval.py`).
+2. Train the next model version from real failures the app logs, with consent.
+3. On-device screenshots, only when a provider explicitly needs them.
+4. Broaden automation coverage and add device tests across Chrome, Settings,
    Calculator, YouTube, Gmail and a messaging app.
-3. Instrumented (Espresso / Compose UI) tests for the agent screens.
+5. Instrumented (Espresso / Compose UI) tests for the agent screens.
 
 ---
 
@@ -260,6 +306,9 @@ which permits bundling and redistribution.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - how we work together
 - [SECURITY.md](SECURITY.md) - reporting a vulnerability, and the security posture
 - [CHANGELOG.md](CHANGELOG.md) - what changed
+- [docs/ON_DEVICE.md](docs/ON_DEVICE.md), [docs/EVALUATION.md](docs/EVALUATION.md),
+  [docs/RELEASING.md](docs/RELEASING.md), [docs/SECURITY.md](docs/SECURITY.md) - model,
+  evaluation, release and privacy details
 - [LICENSE](LICENSE), [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) -
   Apache-2.0 and the components Spidey uses
 
