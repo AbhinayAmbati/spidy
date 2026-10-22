@@ -254,6 +254,17 @@ which permits bundling and redistribution.
 
 ---
 
+## Contributing and policies
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) - how to build, test and send changes
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - how we work together
+- [SECURITY.md](SECURITY.md) - reporting a vulnerability, and the security posture
+- [CHANGELOG.md](CHANGELOG.md) - what changed
+- [LICENSE](LICENSE), [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) -
+  Apache-2.0 and the components Spidey uses
+
+---
+
 ## Legal
 
 The in-app Terms of Service lives in `ui/settings/TermsContent.kt` and is reachable
