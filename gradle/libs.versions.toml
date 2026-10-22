@@ -2,7 +2,7 @@
 # ranges, no "+", no "latest", so a build is reproducible and Dependabot has one file to bump.
 
 [versions]
-agp = "8.5.2"
+agp = "9.4.1"
 kotlin = "1.9.24"
 # The KSP version is prefixed with the Kotlin version it targets; raise both together.
 ksp = "1.9.24-1.0.20"
