@@ -10,7 +10,7 @@
 # VERSION and SHA256 together (checksums: .../releases/download/<ver>/osv-scanner_SHA256SUMS).
 #
 # A finding that is a false positive or cannot be fixed yet is acknowledged in osv-scanner.toml
-# at the repository root ([[IgnoredVulns]] with an id, a reason and an ignoreUntil date).
+# at the repository root (run from there; picked up automatically) ([[IgnoredVulns]] with an id, a reason and an ignoreUntil date).
 set -euo pipefail
 
 VERSION="v2.7.0"
@@ -29,4 +29,6 @@ chmod +x "$BIN"
 
 # `scan source -L <file>` scans exactly this file. Exit code 1 means vulnerabilities were found.
 # The file must be named bom.json (or *.cdx.json) so it is recognised as CycloneDX.
-"$BIN" scan source -L "$SBOM"
+ARGS=(scan source -L "$SBOM")
+if [ -f osv-scanner.toml ]; then ARGS+=(--config osv-scanner.toml); fi
+"$BIN" "${ARGS[@]}"

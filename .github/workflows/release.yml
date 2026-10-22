@@ -1,19 +1,27 @@
 name: Release APK
 
-# Builds an installable release APK.
+# Builds an installable, signed release: spidy.apk, spidy.aab, a CycloneDX SBOM and SHA256SUMS.
 #
-#   Run manually: Actions > Release APK > Run workflow. The APK is attached to the run as the
+#   Run manually: Actions > Release APK > Run workflow. spidy.apk is attached to the run as the
 #   "spidey-apk" artefact (download the zip from the run page, unzip, install spidy.apk).
+#   The version is whatever app/build.gradle.kts defaults to.
 #
-#   Push a v* tag: the same build, and the APK is also attached to a GitHub Release.
+#   Push a tag vMAJOR.MINOR.PATCH[-prerelease]: the same build with the version taken from the
+#   tag (versionName = the tag without the "v"; versionCode = (major*1000000 + minor*1000 +
+#   patch)*10 + 9 for a stable tag, +0 for a pre-release), and everything is attached to a
+#   GitHub Release. The tagged commit must be on main. Full procedure: docs/RELEASING.md.
 #
-# Signing: with the four repository secrets below the APK is signed with your release key.
+# Signing: with the four repository secrets below the release is signed with your release key.
 # Without them it is signed with the debug key, which installs fine for testing but cannot be
-# used to update a build signed with a different key, and is not for distribution.
+# used to update a build signed with a different key, and is not for distribution. Set the
+# repository variable REQUIRE_RELEASE_SIGNING=true to make a tag build fail instead of falling
+# back to the debug key.
 #   KEYSTORE_BASE64     base64 of the .p12/.jks/.keystore file
 #   KEYSTORE_PASSWORD   the keystore password
 #   KEY_ALIAS           the key alias inside the keystore
 #   KEY_PASSWORD        the password for that key
+# Optional repository variable RELEASE_CERT_SHA256: if set, the build fails unless the APK is
+# signed by a certificate with exactly this SHA-256 fingerprint.
 
 on:
   push:
@@ -21,31 +29,94 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# Nothing is writable by default. Only the publish job, which holds no signing material, gets
+# contents: write.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  apk:
-    name: Build release APK
+  build:
+    name: Build release
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    outputs:
+      tag_release: ${{ steps.version.outputs.tag_release }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Turns the tag into versionName / versionCode and refuses anything that is not a clean
+      # semantic version. Inputs go through env, never interpolated into the script.
+      - name: Resolve the version
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" != "tag" ]; then
+            echo "tag_release=false" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "name=(gradle default)" >> "$GITHUB_OUTPUT"
+            echo "code=(gradle default)" >> "$GITHUB_OUTPUT"
+            echo "::notice::Manual run: version comes from the defaults in app/build.gradle.kts."
+            exit 0
+          fi
+          re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z.-]+))?$'
+          if [[ ! "$REF_NAME" =~ $re ]]; then
+            echo "::error::Tag '$REF_NAME' is not vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-prerelease"
+            exit 1
+          fi
+          major=$((10#${BASH_REMATCH[1]})); minor=$((10#${BASH_REMATCH[2]})); patch=$((10#${BASH_REMATCH[3]}))
+          pre="${BASH_REMATCH[5]:-}"
+          if [ "$major" -gt 200 ] || [ "$minor" -gt 999 ] || [ "$patch" -gt 999 ]; then
+            echo "::error::Version out of range for versionCode (major<=200, minor<=999, patch<=999)"
+            exit 1
+          fi
+          code=$(( (major * 1000000 + minor * 1000 + patch) * 10 ))
+          if [ -z "$pre" ]; then code=$((code + 9)); echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else echo "prerelease=true" >> "$GITHUB_OUTPUT"; fi
+          name="${REF_NAME#v}"
+          {
+            echo "tag_release=true"
+            echo "name=$name"
+            echo "code=$code"
+          } >> "$GITHUB_OUTPUT"
+          echo "GRADLE_VERSION_ARGS=-Pspidey.versionName=$name -Pspidey.versionCode=$code" >> "$GITHUB_ENV"
+          echo "::notice::Releasing versionName=$name versionCode=$code"
+
+      # A release must come from reviewed code. Requires the full history fetched above.
+      - name: Require the tagged commit to be on main
+        if: steps.version.outputs.tag_release == 'true'
+        run: |
+          set -euo pipefail
+          git rev-parse --verify --quiet origin/main > /dev/null || { echo "::error::origin/main not found"; exit 1; }
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag commit $GITHUB_SHA is not on main. Merge first, then tag main."
+            exit 1
+          fi
+
+      # Fails the release if a pinned model was replaced upstream (see tools/verify_model_pins.py).
+      - name: Verify pinned model hashes
+        run: python3 -I tools/verify_model_pins.py
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
         with:
           gradle-version: '8.7'
 
@@ -77,10 +148,16 @@ jobs:
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          REQUIRE_SIGNING: ${{ vars.REQUIRE_RELEASE_SIGNING }}
+          IS_TAG_RELEASE: ${{ steps.version.outputs.tag_release }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            if [ "$IS_TAG_RELEASE" = "true" ] && [ "$REQUIRE_SIGNING" = "true" ]; then
+              echo "::error::REQUIRE_RELEASE_SIGNING is true but the signing secrets are not all set."
+              exit 1
+            fi
             echo "signed_with=debug key (no signing secrets set)" >> "$GITHUB_OUTPUT"
-            echo "::notice::Signing secrets are not set; the APK will be signed with the debug key."
+            echo "::warning::Signing secrets are not set; the release is signed with the debug key and is not for distribution."
             exit 0
           fi
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
@@ -91,46 +168,116 @@ jobs:
             echo "keyAlias=$KEY_ALIAS"
             echo "keyPassword=$KEY_PASSWORD"
           } > keystore.properties
-          chmod 600 keystore.properties
+          chmod 600 keystore.properties "$RUNNER_TEMP/release.keystore"
           echo "signed_with=release key" >> "$GITHUB_OUTPUT"
 
-      - name: Assemble release APK
-        run: ./gradlew assembleRelease --stacktrace
+      # One Gradle invocation builds the APK, the AAB and the SBOM. GRADLE_VERSION_ARGS is empty
+      # on a manual run and carries the tag-derived version on a tag build.
+      - name: Assemble release APK and bundle, generate the SBOM
+        run: ./gradlew assembleRelease bundleRelease :app:cyclonedxDirectBom $GRADLE_VERSION_ARGS --stacktrace
 
-      # Gradle names the artefact spidy.apk; this keeps the name fixed if that ever changes.
-      - name: Normalise the APK name
+      # The signing material is no longer needed; do not leave it on the runner.
+      - name: Remove signing material
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/release.keystore"
+
+      # Collects everything for upload and publication under fixed names. Gradle names the APK
+      # spidy.apk; the fallback keeps the name fixed if that ever changes.
+      - name: Stage the release files
         run: |
+          set -euo pipefail
           APK_DIR=app/build/outputs/apk/release
           if [ ! -f "$APK_DIR/spidy.apk" ]; then
             SRC=$(ls "$APK_DIR"/*.apk | head -n 1)
             cp "$SRC" "$APK_DIR/spidy.apk"
           fi
-          ls -la "$APK_DIR"
+          mkdir -p dist
+          cp "$APK_DIR/spidy.apk" dist/spidy.apk
+          cp app/build/outputs/bundle/release/app-release.aab dist/spidy.aab
+          cp app/build/reports/cyclonedx-direct/bom.json dist/spidey-sbom.cdx.json
+          ls -la dist
 
-      # Proves the file is a validly signed APK, not just that the task ran.
+      # Proves the files are validly signed, not just that the tasks ran.
       - name: Verify the APK signature
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
         run: |
+          set -euo pipefail
           SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          APKSIGNER=$(find "$SDK/build-tools" -name apksigner | sort | tail -n 1)
-          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/spidy.apk
+          APKSIGNER=$(find "$SDK/build-tools" -name apksigner | sort -V | tail -n 1)
+          "$APKSIGNER" verify --verbose --print-certs --min-sdk-version 26 dist/spidy.apk | tee apksigner.txt
+          if [ -n "${EXPECTED_CERT_SHA256:-}" ]; then
+            expected=$(echo "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')
+            actual=$(grep -m1 'Signer #1 certificate SHA-256 digest' apksigner.txt | awk '{print $NF}' | tr 'A-F' 'a-f')
+            if [ "$expected" != "$actual" ]; then
+              echo "::error::APK is signed by $actual, expected $expected (RELEASE_CERT_SHA256)"
+              exit 1
+            fi
+            echo "Signing certificate matches RELEASE_CERT_SHA256."
+          fi
+
+      # jarsigner exits 0 even for an unsigned archive, so the success line is checked for.
+      - name: Verify the bundle signature
+        run: |
+          set -euo pipefail
+          jarsigner -verify -certs dist/spidy.aab | tee jarsigner.txt
+          grep -q 'jar verified' jarsigner.txt
+
+      # Confirms the version made it into the artefact, not just into the workflow log.
+      - name: Verify the APK version
+        if: steps.version.outputs.tag_release == 'true'
+        env:
+          WANT_NAME: ${{ steps.version.outputs.name }}
+          WANT_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          AAPT2=$(find "$SDK/build-tools" -name aapt2 | sort -V | tail -n 1)
+          BADGING=$("$AAPT2" dump badging dist/spidy.apk | grep -m1 '^package:')
+          echo "$BADGING"
+          echo "$BADGING" | grep -q "versionCode='$WANT_CODE'"
+          echo "$BADGING" | grep -q "versionName='$WANT_NAME'"
+
+      # 16 KB page-size compatibility of the native libraries (see CMakeLists.txt).
+      - name: Check native library alignment
+        run: python3 -I tools/check_native_alignment.py dist/spidy.apk dist/spidy.aab
+
+      # Blocks the release on a dependency with a known vulnerability.
+      - name: Scan the SBOM for known vulnerabilities
+        run: bash tools/osv_scan.sh app/build/reports/cyclonedx-direct/bom.json
+
+      - name: Write checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum spidy.apk spidy.aab spidey-sbom.cdx.json | tee SHA256SUMS
+          sha256sum --check SHA256SUMS
 
       - name: Summarise the build
+        env:
+          SIGNED_WITH: ${{ steps.signing.outputs.signed_with }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
-          APK=app/build/outputs/apk/release/spidy.apk
           {
-            echo "### Spidey release APK"
+            echo "### Spidey release"
             echo ""
             echo "- Commit: \`${GITHUB_SHA::7}\`"
-            echo "- Signed with: ${{ steps.signing.outputs.signed_with }}"
-            echo "- Size: $(du -h "$APK" | cut -f1)"
-            echo "- SHA-256: \`$(sha256sum "$APK" | cut -d' ' -f1)\`"
+            echo "- Version: $VERSION_NAME (code $VERSION_CODE)"
+            echo "- Signed with: $SIGNED_WITH"
+            echo "- APK size: $(du -h dist/spidy.apk | cut -f1), AAB size: $(du -h dist/spidy.aab | cut -f1)"
+            echo ""
+            echo "SHA-256:"
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
             echo ""
             echo "Download the **spidey-apk** artefact below, unzip it, and install \`spidy.apk\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-test-reports
           path: |
@@ -139,21 +286,81 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Fixed contract: an artefact named spidey-apk containing spidy.apk.
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: spidey-apk
-          path: app/build/outputs/apk/release/spidy.apk
+          path: dist/spidy.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attach APK to the GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: spidey-aab
+          path: dist/spidy.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: spidey-sbom
+          path: dist/spidey-sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 90
+
+      # Everything that goes on the GitHub Release, handed to the publish job as one unit.
+      - name: Upload release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: spidey-release-assets
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      # De-obfuscates R8-processed crash traces for this exact build. Kept as a workflow
+      # artefact rather than attached to the public release.
+      - name: Upload R8 mapping
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: spidey-mapping
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    if: needs.build.outputs.tag_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+      PRERELEASE: ${{ needs.build.outputs.prerelease }}
+
+    steps:
+      - name: Download the release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: spidey-release-assets
+          path: dist
+
+      - name: Re-check the checksums
         run: |
-          APK=app/build/outputs/apk/release/spidy.apk
-          gh release create "${GITHUB_REF_NAME}" "$APK" \
-            --title "Spidey ${GITHUB_REF_NAME}" \
-            --generate-notes \
-          || gh release upload "${GITHUB_REF_NAME}" "$APK" --clobber
+          cd dist
+          sha256sum --check SHA256SUMS
+
+      - name: Create or update the GitHub Release
+        run: |
+          set -euo pipefail
+          FLAGS=()
+          if [ "$PRERELEASE" = "true" ]; then FLAGS+=(--prerelease); fi
+          gh release create "$TAG" dist/spidy.apk dist/spidy.aab dist/spidey-sbom.cdx.json dist/SHA256SUMS \
+            --verify-tag --title "Spidey $TAG" --generate-notes "${FLAGS[@]}" \
+          || gh release upload "$TAG" dist/spidy.apk dist/spidy.aab dist/spidey-sbom.cdx.json dist/SHA256SUMS --clobber

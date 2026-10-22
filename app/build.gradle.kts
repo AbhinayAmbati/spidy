@@ -137,7 +137,9 @@ android {
     lint {
         abortOnError = true
         val lintBaseline = file("lint-baseline.xml")
-        if (lintBaseline.exists()) {
+        // -Pspidey.updateLintBaseline=true is how the baseline is first created (it must be
+        // configured before :app:updateLintBaseline can write it); see the CI workflow.
+        if (lintBaseline.exists() || providers.gradleProperty("spidey.updateLintBaseline").isPresent) {
             baseline = lintBaseline
         }
     }
