@@ -138,6 +138,27 @@ class NeedleProviderTest {
         assertThat(json).contains("\"parameters\":{\"type\":\"object\"")
     }
 
+    @Test
+    fun `at most five tools are offered, openers first and screen actions after`() {
+        val all = listOf(
+            ToolNames.OPEN_APP, ToolNames.CLOSE_APP, ToolNames.READ_SCREEN, ToolNames.CLICK, ToolNames.TYPE_TEXT,
+            ToolNames.SCROLL, ToolNames.PRESS_BACK, ToolNames.PRESS_HOME, ToolNames.LAUNCH_URL, ToolNames.FINISH,
+        ).map { AgentToolSpec(it, "d", """{"type":"object","properties":{}}""") }
+
+        val opening = NeedlePrompt.toolsFor(conversation(), all).map { it.name }
+        val working = NeedlePrompt.toolsFor(
+            conversation() + AgentMessage(MessageRole.Tool, "Observation:\n[k1]", toolCallId = "c1", name = "open_app"),
+            all,
+        ).map { it.name }
+
+        assertThat(opening).containsExactly(
+            ToolNames.OPEN_APP, ToolNames.LAUNCH_URL, ToolNames.READ_SCREEN, ToolNames.PRESS_HOME, ToolNames.FINISH,
+        )
+        assertThat(working).containsExactly(
+            ToolNames.CLICK, ToolNames.TYPE_TEXT, ToolNames.SCROLL, ToolNames.PRESS_BACK, ToolNames.FINISH,
+        )
+    }
+
     // ---- provider --------------------------------------------------------------------
 
     @Test

@@ -20,6 +20,7 @@ object NeedlePrompt {
 
     const val MAX_HISTORY = 5
     const val MAX_SCREEN_LINES = 40
+    const val MAX_TOOLS = 5
 
     private const val TASK_PREFIX = "Task: "
     private const val SCREEN_MARKER = "Current screen:"
@@ -28,6 +29,22 @@ object NeedlePrompt {
     val SYSTEM_PROMPT = "You control an Android phone by calling one tool per step. " +
         "Pick the tool that moves the task forward, and fill every argument from the task " +
         "and the screen. Call finish when the task is done."
+
+    // Needle is built for a handful of tools; past 5 it switches to per-turn retrieval, which
+    // needs an index we do not ship and which picked arguments from nowhere on a real device.
+    private val OPENING_TOOLS = listOf("open_app", "launch_url", "read_screen", "press_home", "finish")
+    private val WORKING_TOOLS = listOf("click", "type_text", "scroll", "press_back", "finish")
+
+    /**
+     * The at-most-5 tools offered this turn: ways to get started before anything has happened,
+     * ways to act on a screen afterwards.
+     */
+    fun toolsFor(messages: List<AgentMessage>, all: List<AgentToolSpec>): List<AgentToolSpec> {
+        val started = messages.any { it.role == MessageRole.Tool }
+        val wanted = if (started) WORKING_TOOLS else OPENING_TOOLS
+        val chosen = all.filter { it.name in wanted }
+        return chosen.ifEmpty { all.take(MAX_TOOLS) }
+    }
 
     /** The tools in the shape the engine reads: a JSON array of name, description, parameters. */
     fun toolsJson(tools: List<AgentToolSpec>): String =

@@ -34,7 +34,7 @@ class NeedleProvider(
     ): AgentResponse = gate.withLock {
         withContext(Dispatchers.Default) {
             try {
-                val toolsJson = NeedlePrompt.toolsJson(tools)
+                val toolsJson = NeedlePrompt.toolsJson(NeedlePrompt.toolsFor(messages, tools))
                 if (toolsJson != startedWith) {
                     engine.start(NeedlePrompt.SYSTEM_PROMPT, toolsJson)
                     startedWith = toolsJson

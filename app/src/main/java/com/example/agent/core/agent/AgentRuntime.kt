@@ -320,7 +320,8 @@ class AgentRuntime(
                     }
                     modelMillis = clock.uptimeMillis() - modelStartedAt
                     response = generated
-                    lastReply = generated.message?.takeIf { it.isNotBlank() } ?: generated.raw
+                    // The raw reply, not the parsed message: it shows the calls and confidence too.
+                    lastReply = generated.raw?.takeIf { it.isNotBlank() } ?: generated.message
                     calls = generated.calls
                 }
 
