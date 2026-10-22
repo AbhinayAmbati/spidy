@@ -107,7 +107,7 @@ class SpideyRouterTest {
     @Test
     fun `the engine starts once per tool set and resets before every call`() = runTest {
         val a = single("open_app", """{"app":"x"}""")
-        val (router, engine) = routerFor(a, a, a)
+        val (router, engine) = routerFor(a, a, a, a)
 
         router.route("open x")
         router.route("open x")
