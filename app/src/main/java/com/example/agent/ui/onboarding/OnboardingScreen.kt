@@ -66,7 +66,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
             context.startActivity(PermissionUtils.accessibilitySettingsIntent())
         },
         onEnableNotificationAccess = {
-            context.startActivity(PermissionUtils.notificationListenerSettingsIntent())
+            PermissionUtils.openNotificationAccess(context)
         },
         onDone = onDone,
     )

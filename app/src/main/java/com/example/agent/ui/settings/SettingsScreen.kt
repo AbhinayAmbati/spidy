@@ -118,7 +118,7 @@ fun SettingsScreen(
         },
         onEnableNotifications = { notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
         onOpenNotificationAccess = {
-            context.startActivity(PermissionUtils.notificationListenerSettingsIntent())
+            PermissionUtils.openNotificationAccess(context)
         },
         onSelectAppearance = viewModel::setAppearance,
         onTouchToStopChange = viewModel::setTouchToStop,

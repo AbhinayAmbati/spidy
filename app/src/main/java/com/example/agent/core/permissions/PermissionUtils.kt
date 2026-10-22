@@ -67,5 +67,25 @@ object PermissionUtils {
 
     /** Opens the notification-access page used to grant the (optional) notification reader. */
     fun notificationListenerSettingsIntent(): Intent =
-        Intent("android.settings.NOTIFICATION_LISTENER_SETTINGS")
+        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+
+    /**
+     * Opens the notification-access screen, falling back to the app's own settings page.
+     *
+     * Some vendor settings apps (seen on Xiaomi) do not handle the listener action, and an
+     * unhandled intent throws ActivityNotFoundException, which closed the whole app.
+     * Returns false if nothing could be opened.
+     */
+    fun openNotificationAccess(context: Context): Boolean {
+        val attempts = buildList {
+            add(notificationListenerSettingsIntent())
+            add(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(android.net.Uri.fromParts("package", context.packageName, null)),
+            )
+        }
+        return attempts.any { intent ->
+            runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        }
+    }
 }
