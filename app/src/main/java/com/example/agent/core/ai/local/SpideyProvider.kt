@@ -1,58 +1,40 @@
 package com.example.agent.core.ai.local
 
 import com.example.agent.core.ai.AIProvider
-import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AgentToolSpec
 import com.example.agent.domain.model.AgentMessage
 import com.example.agent.domain.model.AgentResponse
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 
 /**
- * [AIProvider] that runs the model on the device, with no network and no API key.
+ * Legacy adapter, kept only so OnDeviceModelManager and the old agent loop still compile.
  *
- * Each turn is independent: the engine is reset and given the task, the last few results and
- * the current screen. The engine allows one call at a time, so calls queue on [gate]. A call
- * in flight cannot be interrupted, so Stop takes effect when it returns.
+ * Spidey no longer drives the accessibility agent loop: it routes one sentence to one intent
+ * through [com.example.agent.core.intent.SpideyRouter]. This provider never touches the engine
+ * and answers every turn with a plain message.
+ *
+ * TODO(integrator): delete this class together with the AIProvider wiring in
+ * `core/agent/AgentRuntime.kt` and `OnDeviceModelManager.provider()`.
  */
+@Suppress("UNUSED_PARAMETER")
 class SpideyProvider(
-    private val engine: LocalToolEngine,
-    private val minConfidence: Double = 0.0,
-    private val maxNewTokens: Int = DEFAULT_MAX_NEW_TOKENS,
+    engine: LocalToolEngine,
+    minConfidence: Double = 0.0,
+    maxNewTokens: Int = DEFAULT_MAX_NEW_TOKENS,
 ) : AIProvider {
 
     override val id: String = "spidey"
 
-    // The engine is reset every turn and sees only the task, history and screen, so a retry
-    // nudge never reaches it and the same input gives the same answer.
     override val isDeterministic: Boolean = true
-
-    private val gate = Mutex()
-    private var startedWith: String? = null
 
     override suspend fun generateResponse(
         messages: List<AgentMessage>,
         tools: List<AgentToolSpec>,
-    ): AgentResponse = gate.withLock {
-        withContext(Dispatchers.Default) {
-            try {
-                val toolsJson = SpideyPrompt.toolsJson(SpideyPrompt.toolsFor(messages, tools))
-                if (toolsJson != startedWith) {
-                    engine.start(SpideyPrompt.SYSTEM_PROMPT, toolsJson)
-                    startedWith = toolsJson
-                }
-                engine.reset()
-                SpideyResponseParser.parse(engine.complete(SpideyPrompt.input(messages), maxNewTokens), minConfidence)
-            } catch (failure: LocalEngineException) {
-                throw AIProviderException(AIProviderException.Kind.Unknown, failure.message ?: "On-device model failed", failure)
-            }
-        }
-    }
+    ): AgentResponse = AgentResponse(
+        message = "Spidey now answers one request at a time through the intent router.",
+        raw = "",
+    )
 
     companion object {
-        /** A tool call is short; a larger cap only takes context away from the screen. */
         const val DEFAULT_MAX_NEW_TOKENS = 192
     }
 }

@@ -1,200 +1,141 @@
 package com.example.agent
 
-import com.example.agent.core.ai.AIProviderException
-import com.example.agent.core.ai.AgentToolSpec
-import com.example.agent.core.ai.local.LocalEngineException
 import com.example.agent.core.ai.local.LocalToolEngine
 import com.example.agent.core.ai.local.SpideyPrompt
 import com.example.agent.core.ai.local.SpideyProvider
 import com.example.agent.core.ai.local.SpideyResponseParser
-import com.example.agent.domain.model.AgentMessage
-import com.example.agent.domain.model.MessageRole
-import com.example.agent.domain.model.ToolCall
-import com.example.agent.domain.model.ToolNames
+import com.example.agent.core.intent.SpideyIntent
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class SpideyProviderTest {
 
-    private class FakeEngine(private val answers: ArrayDeque<String>) : LocalToolEngine {
-        var starts = 0
-        var resets = 0
-        val inputs = mutableListOf<String>()
-        var failWith: String? = null
+    private fun call(name: String, args: String) = """{"name":"$name","arguments":$args}"""
 
-        override fun start(systemPrompt: String, toolsJson: String) {
-            failWith?.let { throw LocalEngineException(it) }
-            starts++
-        }
-
-        override fun reset() {
-            resets++
-        }
-
-        override fun complete(input: String, maxNewTokens: Int): String {
-            inputs += input
-            return answers.removeFirst()
-        }
-    }
-
-    private val tools = listOf(
-        AgentToolSpec(ToolNames.CLICK, "Tap an element.", """{"type":"object","properties":{"target":{"type":"object"}}}"""),
-        AgentToolSpec(ToolNames.FINISH, "Declare the task complete.", """{"type":"object","properties":{}}"""),
-    )
-
-    private fun conversation() = listOf(
-        AgentMessage(MessageRole.System, "ignored"),
-        AgentMessage(MessageRole.User, "Task: open the settings\n\nCurrent screen:\n[k1] \"Search\" <EditText>"),
-    )
-
-    private val clickAnswer =
-        """{"function_calls":[{"name":"click","arguments":{"target":{"text":"Settings"}}}],"reasoning":"tap it","confidence":0.93}"""
+    private fun answer(vararg calls: String, confidence: String = "0.9") =
+        """{"function_calls":[${calls.joinToString(",")}],"reasoning":"r","confidence":$confidence}"""
 
     // ---- parser ----------------------------------------------------------------------
 
     @Test
-    fun `a function call becomes an action`() {
-        val response = SpideyResponseParser.parse(clickAnswer)
+    fun `each of the five tools becomes its intent`() {
+        val parsed = SpideyResponseParser.parse(
+            answer(
+                call("open_app", """{"app":"Spotify"}"""),
+                call("send_message", """{"contact":"Priya","text":"I'll be late"}"""),
+                call("call_contact", """{"contact":"Priya"}"""),
+                call("set_alarm", """{"time":"6 am"}"""),
+                call("set_timer", """{"minutes":10}"""),
+            ),
+        )
 
-        assertThat(response.calls).hasSize(1)
-        assertThat(response.calls.single().action.action).isEqualTo(ToolNames.CLICK)
-        assertThat(response.calls.single().action.target?.text).isEqualTo("Settings")
+        assertThat(parsed.malformed).isEmpty()
+        assertThat(parsed.confidence).isEqualTo(0.9)
+        assertThat(parsed.intents).containsExactly(
+            SpideyIntent.OpenApp("Spotify"),
+            SpideyIntent.SendMessage("Priya", "I'll be late"),
+            SpideyIntent.CallContact("Priya"),
+            SpideyIntent.SetAlarm("6 am"),
+            SpideyIntent.SetTimer(10),
+        ).inOrder()
     }
 
     @Test
     fun `arguments sent as a JSON string are accepted`() {
-        val raw = """{"function_calls":[{"name":"click","arguments":"{\"target\":{\"text\":\"Wi-Fi\"}}"}],"confidence":0.9}"""
+        val raw = """{"function_calls":[{"name":"call_contact","arguments":"{\"contact\":\"Priya\"}"}]}"""
 
-        assertThat(SpideyResponseParser.parse(raw).calls.single().action.target?.text).isEqualTo("Wi-Fi")
+        val parsed = SpideyResponseParser.parse(raw)
+
+        assertThat(parsed.intents).containsExactly(SpideyIntent.CallContact("Priya"))
+        assertThat(parsed.confidence).isNull()
     }
 
     @Test
-    fun `an empty call list becomes a reply with no actions`() {
-        val response = SpideyResponseParser.parse("""{"function_calls":[],"reasoning":"nothing fits","confidence":0.4}""")
+    fun `minutes are coerced from a string or a whole double`() {
+        val parsed = SpideyResponseParser.parse(
+            answer(
+                call("set_timer", """{"minutes":"15"}"""),
+                call("set_timer", """{"minutes":20.0}"""),
+            ),
+        )
 
-        assertThat(response.calls).isEmpty()
-        assertThat(response.message).isEqualTo("nothing fits")
+        assertThat(parsed.intents).containsExactly(SpideyIntent.SetTimer(15), SpideyIntent.SetTimer(20)).inOrder()
     }
 
     @Test
-    fun `a call below the confidence floor is dropped`() {
-        val response = SpideyResponseParser.parse(clickAnswer, minConfidence = 0.95)
+    fun `a fractional or non-numeric minutes value is malformed`() {
+        val parsed = SpideyResponseParser.parse(
+            answer(
+                call("set_timer", """{"minutes":2.5}"""),
+                call("set_timer", """{"minutes":"soon"}"""),
+            ),
+        )
 
-        assertThat(response.calls).isEmpty()
-        assertThat(response.message).contains("not confident")
+        assertThat(parsed.intents).isEmpty()
+        assertThat(parsed.malformed).hasSize(2)
     }
 
     @Test
-    fun `output that is not JSON is a parse failure`() {
-        val failure = assertThrows(AIProviderException::class.java) { SpideyResponseParser.parse("garbled") }
+    fun `unknown tools and missing arguments go to the malformed list`() {
+        val parsed = SpideyResponseParser.parse(
+            answer(
+                call("launch_url", """{"url":"x"}"""),
+                call("send_message", """{"contact":"Priya"}"""),
+                call("open_app", "{}"),
+                call("call_contact", """{"contact":"  "}"""),
+                call("set_alarm", "null"),
+                call("set_alarm", """{"time":"7:30 pm"}"""),
+            ),
+        )
 
-        assertThat(failure.kind).isEqualTo(AIProviderException.Kind.Parse)
+        assertThat(parsed.intents).containsExactly(SpideyIntent.SetAlarm("7:30 pm"))
+        assertThat(parsed.malformed).hasSize(5)
+        assertThat(parsed.malformed.first()).contains("unknown tool")
+    }
+
+    @Test
+    fun `an empty call list is no intents and nothing malformed`() {
+        val parsed = SpideyResponseParser.parse(
+            """{"function_calls":[],"reasoning":"no matching tool","confidence":0.4}""",
+        )
+
+        assertThat(parsed.intents).isEmpty()
+        assertThat(parsed.malformed).isEmpty()
+        assertThat(parsed.reasoning).isEqualTo("no matching tool")
+    }
+
+    @Test
+    fun `output that is not JSON is reported, not thrown`() {
+        val parsed = SpideyResponseParser.parse("garbled")
+
+        assertThat(parsed.intents).isEmpty()
+        assertThat(parsed.malformed).hasSize(1)
     }
 
     // ---- prompt ----------------------------------------------------------------------
 
     @Test
-    fun `the first input is the task alone, without the screen or the system prompt`() {
-        val input = SpideyPrompt.input(conversation())
+    fun `the input is the trimmed sentence and nothing else`() {
+        val prompt = SpideyPrompt("[]")
 
-        assertThat(input).contains("Task: open the settings")
-        assertThat(input).doesNotContain("[k1]")
-        assertThat(input).doesNotContain("ignored")
+        assertThat(prompt.input("  text Priya I'll be late \n")).isEqualTo("text Priya I'll be late")
+        assertThat(SpideyPrompt.SYSTEM_PROMPT).isEmpty()
     }
 
-    @Test
-    fun `the input shows recent results and the newest screen`() {
-        val messages = conversation() + listOf(
-            AgentMessage(MessageRole.Assistant, "", toolCalls = listOf(ToolCall("c1", "click", """{"target":{"text":"Search"}}"""))),
-            AgentMessage(MessageRole.Tool, "Observation:\n[k9] \"Settings\" <TextView>", toolCallId = "c1", name = "click"),
-        )
-
-        val input = SpideyPrompt.input(messages)
-
-        assertThat(input).contains("Done so far:")
-        assertThat(input).contains("click")
-        assertThat(input).contains("[k9] \"Settings\" <TextView>")
-        assertThat(input).doesNotContain("[k1]")
-    }
+    // ---- legacy adapter --------------------------------------------------------------
 
     @Test
-    fun `a long screen is capped`() {
-        val listing = (1..200).joinToString("\n") { "[k$it] \"Item $it\"" }
-        val messages = listOf(
-            AgentMessage(MessageRole.User, "Task: scroll"),
-            AgentMessage(MessageRole.Tool, "Observation:\n$listing", toolCallId = "c1", name = "read_screen"),
-        )
+    fun `the legacy provider answers with a message and never calls the engine`() = runTest {
+        val engine = object : LocalToolEngine {
+            override fun start(systemPrompt: String, toolsJson: String) = error("not used")
+            override fun reset() = error("not used")
+            override fun complete(input: String, maxNewTokens: Int): String = error("not used")
+        }
 
-        val lines = SpideyPrompt.input(messages).lines().count { it.startsWith("[k") }
+        val response = SpideyProvider(engine).generateResponse(emptyList(), emptyList())
 
-        assertThat(lines).isEqualTo(SpideyPrompt.MAX_SCREEN_LINES)
-    }
-
-    @Test
-    fun `tools are described as name, description and parameters`() {
-        val json = SpideyPrompt.toolsJson(tools)
-
-        assertThat(json).contains("\"name\":\"click\"")
-        assertThat(json).contains("\"description\":\"Tap an element.\"")
-        assertThat(json).contains("\"parameters\":{\"type\":\"object\"")
-    }
-
-    @Test
-    fun `at most five tools are offered, openers first and screen actions after`() {
-        val all = listOf(
-            ToolNames.OPEN_APP, ToolNames.CLOSE_APP, ToolNames.READ_SCREEN, ToolNames.CLICK, ToolNames.TYPE_TEXT,
-            ToolNames.SCROLL, ToolNames.PRESS_BACK, ToolNames.PRESS_HOME, ToolNames.LAUNCH_URL, ToolNames.FINISH,
-        ).map { AgentToolSpec(it, "d", """{"type":"object","properties":{}}""") }
-
-        val opening = SpideyPrompt.toolsFor(conversation(), all).map { it.name }
-        val working = SpideyPrompt.toolsFor(
-            conversation() + AgentMessage(MessageRole.Tool, "Observation:\n[k1]", toolCallId = "c1", name = "open_app"),
-            all,
-        ).map { it.name }
-
-        assertThat(opening).containsExactly(
-            ToolNames.OPEN_APP, ToolNames.LAUNCH_URL, ToolNames.READ_SCREEN, ToolNames.PRESS_HOME, ToolNames.FINISH,
-        )
-        assertThat(working).containsExactly(
-            ToolNames.CLICK, ToolNames.TYPE_TEXT, ToolNames.SCROLL, ToolNames.PRESS_BACK, ToolNames.FINISH,
-        )
-    }
-
-    // ---- provider --------------------------------------------------------------------
-
-    @Test
-    fun `the engine is started once per tool set and reset before every turn`() = runTest {
-        val engine = FakeEngine(ArrayDeque(listOf(clickAnswer, clickAnswer)))
-        val provider = SpideyProvider(engine)
-
-        provider.generateResponse(conversation(), tools)
-        provider.generateResponse(conversation(), tools)
-
-        assertThat(engine.starts).isEqualTo(1)
-        assertThat(engine.resets).isEqualTo(2)
-    }
-
-    @Test
-    fun `a different tool set restarts the engine`() = runTest {
-        val engine = FakeEngine(ArrayDeque(listOf(clickAnswer, clickAnswer)))
-        val provider = SpideyProvider(engine)
-
-        provider.generateResponse(conversation(), tools)
-        provider.generateResponse(conversation(), tools.take(1))
-
-        assertThat(engine.starts).isEqualTo(2)
-    }
-
-    @Test
-    fun `an engine failure surfaces as a provider error with the engine's reason`() = runTest {
-        val engine = FakeEngine(ArrayDeque()).apply { failWith = "context too small" }
-        val provider = SpideyProvider(engine)
-
-        val failure = runCatching { provider.generateResponse(conversation(), tools) }.exceptionOrNull()
-
-        assertThat(failure).isInstanceOf(AIProviderException::class.java)
-        assertThat(failure?.message).contains("context too small")
+        assertThat(response.calls).isEmpty()
+        assertThat(response.message).isNotNull()
     }
 }

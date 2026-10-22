@@ -4,7 +4,7 @@ package com.example.agent.core.ai.local
 class LocalEngineException(message: String) : Exception(message)
 
 /**
- * What [SpideyProvider] needs from an on-device tool-calling model, and nothing else, so the
+ * What [com.example.agent.core.intent.SpideyRouter] needs from an on-device tool-calling model, and nothing else, so the
  * provider can be tested without the native library.
  */
 interface LocalToolEngine {
