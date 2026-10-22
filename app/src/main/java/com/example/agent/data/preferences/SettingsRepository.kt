@@ -5,8 +5,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.agent.core.audit.AuditPolicy
+import com.example.agent.core.audit.RequestTextMode
 import com.example.agent.core.security.SecureCredentialStore
 import com.example.agent.domain.model.AppearanceMode
 import com.example.agent.domain.model.ProviderConfig
@@ -35,6 +38,9 @@ class SettingsRepository(
         val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
         val TOUCH_TO_STOP = booleanPreferencesKey("touch_to_stop")
         val ONBOARDED = booleanPreferencesKey("onboarded")
+        val AUDIT_RETENTION_DAYS = intPreferencesKey("audit_retention_days")
+        val AUDIT_KEEP_CONTACT_NAMES = booleanPreferencesKey("audit_keep_contact_names")
+        val AUDIT_REQUEST_TEXT = stringPreferencesKey("audit_request_text")
     }
 
     /**
@@ -93,6 +99,34 @@ class SettingsRepository(
 
     suspend fun setOnboarded(value: Boolean) {
         context.dataStore.edit { it[Keys.ONBOARDED] = value }
+    }
+
+    // ---- audit and privacy ----
+
+    /** Days audit records are kept; 0 turns the audit log off. An administrator may override it. */
+    val auditRetentionDays: Flow<Int> = context.dataStore.data.map {
+        it[Keys.AUDIT_RETENTION_DAYS] ?: AuditPolicy.DEFAULT_RETENTION_DAYS
+    }
+
+    suspend fun setAuditRetentionDays(days: Int) {
+        context.dataStore.edit { it[Keys.AUDIT_RETENTION_DAYS] = days.coerceAtLeast(0) }
+    }
+
+    /** Off by default: contacts are stored as a placeholder. */
+    val auditKeepContactNames: Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.AUDIT_KEEP_CONTACT_NAMES] ?: false
+    }
+
+    suspend fun setAuditKeepContactNames(keep: Boolean) {
+        context.dataStore.edit { it[Keys.AUDIT_KEEP_CONTACT_NAMES] = keep }
+    }
+
+    val auditRequestTextMode: Flow<RequestTextMode> = context.dataStore.data.map {
+        RequestTextMode.fromKey(it[Keys.AUDIT_REQUEST_TEXT])
+    }
+
+    suspend fun setAuditRequestTextMode(mode: RequestTextMode) {
+        context.dataStore.edit { it[Keys.AUDIT_REQUEST_TEXT] = mode.key }
     }
 
     // ---- credentials (delegated so callers have one settings surface) ----
