@@ -29,11 +29,22 @@ import com.example.agent.core.agent.DeviceClock
 import com.example.agent.core.agent.DeviceScreen
 import com.example.agent.core.agent.StoredTaskJournal
 import com.example.agent.core.agent.TouchToStopWatcher
+import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AIProviderFactory
 import com.example.agent.core.ai.local.ModelDownloader
+import com.example.agent.core.ai.local.ModelStatus
+import com.example.agent.core.ai.local.NativeSpideyEngine
+import com.example.agent.core.ai.local.OnDeviceModels
 import com.example.agent.core.ai.local.OkHttpRangeSource
 import com.example.agent.core.ai.local.OnDeviceModelManager
+import com.example.agent.core.ai.local.SpideyPrompt
 import com.example.agent.core.ai.provider.OpenAICompatibleProvider
+import com.example.agent.core.intent.ActionExecutor
+import com.example.agent.core.intent.IntentGuard
+import com.example.agent.core.intent.IntentRouter
+import com.example.agent.core.intent.IntentRuntime
+import com.example.agent.core.intent.RoutedRequest
+import com.example.agent.core.intent.SpideyRouter
 import com.example.agent.core.security.SecureCredentialStore
 import com.example.agent.data.local.AgentDatabase
 import com.example.agent.data.local.TaskDao
@@ -151,21 +162,59 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideModelDownloader(@ApplicationContext context: Context): ModelDownloader =
+        ModelDownloader(
+            source = OkHttpRangeSource(OpenAICompatibleProvider.defaultClient()),
+            directory = File(context.filesDir, "models"),
+        )
+
+    @Provides
+    @Singleton
     fun provideOnDeviceModels(
         @ApplicationContext context: Context,
+        downloader: ModelDownloader,
         @ApplicationScope scope: CoroutineScope,
     ): OnDeviceModelManager {
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
         return OnDeviceModelManager(
-            downloader = ModelDownloader(
-                source = OkHttpRangeSource(OpenAICompatibleProvider.defaultClient()),
-                directory = File(context.filesDir, "models"),
-            ),
+            downloader = downloader,
             scope = scope,
             // Unknown counts as metered: better to wait for the user than spend their data.
             isMetered = { connectivity?.isActiveNetworkMetered ?: true },
         )
     }
+
+    /** The model is loaded on the first request, once the download has finished. */
+    @Provides
+    @Singleton
+    fun provideIntentRouter(
+        @ApplicationContext context: Context,
+        models: OnDeviceModelManager,
+        downloader: ModelDownloader,
+    ): IntentRouter = LazySpideyRouter(
+        isReady = { models.spidey.value },
+        engineFile = { downloader.fileFor(OnDeviceModels.SPIDEY) },
+        toolsJson = { context.assets.open("spidey_tools.json").bufferedReader().use { it.readText() } },
+    )
+
+    @Provides
+    @Singleton
+    fun provideIntentRuntime(
+        router: IntentRouter,
+        guard: IntentGuard,
+        executor: ActionExecutor,
+        automation: AndroidAutomationManager,
+        history: TaskHistoryRepository,
+        memory: MemoryRepository,
+        @ApplicationScope scope: CoroutineScope,
+    ): IntentRuntime = IntentRuntime(
+        router = router,
+        guard = guard,
+        executor = executor,
+        journal = StoredTaskJournal(history, memory, automation),
+        clock = DeviceClock,
+        scope = scope,
+    )
 
     @Provides
     @Singleton
@@ -178,6 +227,7 @@ object AppModule {
         automation: AndroidAutomationManager,
         history: TaskHistoryRepository,
         memory: MemoryRepository,
+        intents: IntentRuntime,
         @ApplicationScope scope: CoroutineScope,
     ): AgentRuntime = AgentRuntime(
         models = models,
@@ -187,5 +237,41 @@ object AppModule {
         journal = StoredTaskJournal(history, memory, automation),
         clock = DeviceClock,
         scope = scope,
+        intents = intents,
+        // The accessibility loop is a fallback only; flip this to run sentences through it.
+        fallbackLoopEnabled = false,
     ).also { runtime -> TouchToStopWatcher(settings).watch(runtime, scope) }
+}
+
+/**
+ * Builds [SpideyRouter] on the first request, so the app starts without the model and a missing
+ * download is reported as a message the task screen can show.
+ */
+private class LazySpideyRouter(
+    private val isReady: () -> ModelStatus,
+    private val engineFile: () -> File,
+    private val toolsJson: () -> String,
+) : IntentRouter {
+
+    private var router: SpideyRouter? = null
+
+    override suspend fun route(sentence: String): RoutedRequest {
+        val existing = router ?: create().also { router = it }
+        return existing.route(sentence)
+    }
+
+    private fun create(): SpideyRouter {
+        when (val status = isReady()) {
+            ModelStatus.Ready -> Unit
+            is ModelStatus.Downloading -> throw AIProviderException(
+                AIProviderException.Kind.Unknown,
+                "The on-device model is still downloading (${status.percent}%). Try again when it finishes.",
+            )
+            else -> throw AIProviderException(
+                AIProviderException.Kind.Unknown,
+                "The on-device model has not been downloaded yet. Open Settings to download it.",
+            )
+        }
+        return SpideyRouter(NativeSpideyEngine(engineFile()), SpideyPrompt(toolsJson()))
+    }
 }
