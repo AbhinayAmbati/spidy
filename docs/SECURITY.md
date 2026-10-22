@@ -61,6 +61,50 @@ API keys are never displayed in full. The UI shows only the last four characters
 screen is marked `FLAG_SECURE`, so it is excluded from screenshots, the recents thumbnail and
 screen recording.
 
+## Audit and data handling
+
+Spidey keeps a short activity log so you (or your administrator) can see what it did. It
+lives in the app's private database on this phone, is never uploaded, and is covered by
+"Delete all my data" in Settings.
+
+**Each audit entry stores exactly these fields:**
+
+| Field | What it holds |
+| --- | --- |
+| `id`, `timestampMillis` | A random identifier and when the request happened |
+| `requestText` | Your sentence as a 16-character SHA-256 fingerprint (default), its first 24 characters, or nothing - your choice. Never the full sentence |
+| `intentType` | `open_app`, `send_message`, `call_contact`, `set_alarm`, `set_timer`, or `none` |
+| `intentSummary` | One short line, for example `open maps`, `message [contact]`, `alarm 6 am`, `timer 5 min` |
+| `guardVerdict` | `allow`, `reject` or `none` |
+| `confirmed` | Empty if no confirmation was asked, otherwise your yes or no |
+| `result` | `done`, `failed`, `rejected` or `cancelled` |
+| `durationMs`, `appVersion` | How long it took and which app version ran it |
+
+**Never stored in the audit log:** message bodies, phone numbers, contact details other than a
+name, screen contents, API keys. A contact appears as `[contact]` unless you switch on "Keep
+contact names in log".
+
+**Retention.** Entries are kept for 7, 30 (default) or 90 days, or not recorded at all ("Off").
+Expired entries are deleted when the app starts, when the setting changes, and at most once an
+hour while entries are being written. Turning the log off deletes what is there.
+
+**Export and delete.** Settings > Privacy and data > Export saves task history and the audit
+log as a JSON file through the system file picker; you choose where it goes and Spidey keeps no
+copy. "Delete all my data" (after a confirmation) clears task history, the audit log, memory and
+saved routines. It leaves settings and any stored API key alone; remove a key from the provider
+screen.
+
+**Other data on the device** (unchanged): task history (your prompt, the actions taken and a
+summary) in the same database; app shortcuts the agent learned, in a separate preferences
+file, only while "Remember preferences" is on; saved routines; settings.
+
+**Managed configuration.** On a work-managed or work-profile device an administrator can set
+`disable_voice`, `always_confirm`, `allowed_actions` (a subset of the five actions),
+`audit_retention_days` (0 turns the log off) and `disable_model_download_on_metered`. The app
+reads them through Android's `RestrictionsManager` and applies changes live. A restricted
+setting is shown as managed in Settings. An administrator's retention overrides the user's.
+The log is never sent to an administrator; there is no remote reporting.
+
 ## Network
 
 **No cleartext, ever.** `usesCleartextTraffic` is off and the network security config forbids it
