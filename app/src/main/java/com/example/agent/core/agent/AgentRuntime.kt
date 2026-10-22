@@ -326,6 +326,15 @@ class AgentRuntime(
                 }
 
                 if (calls.isEmpty()) {
+                    // "Open X" is finished once the app is open; Needle does not call finish
+                    // afterwards, and nudging it only ends in a false failure.
+                    if (OpenOnlyTask.isSatisfied(prompt, toolsUsed, steps)) {
+                        finish(
+                            taskId, prompt, startedAt, stepCount, appsUsed, steps,
+                            TaskState.COMPLETED, OpenOnlyTask.summary(steps),
+                        )
+                        return
+                    }
                     val said = response?.message?.takeIf { it.isNotBlank() }
                     if (said != null) messages += AgentMessage(MessageRole.Assistant, said)
 
