@@ -5,8 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.agent.automation.AgentForegroundService
 import com.example.agent.core.agent.AgentRuntime
-import com.example.agent.core.permissions.AccessibilityWatch
-import com.example.agent.core.permissions.PermissionStatus
 import com.example.agent.data.repository.RoutineRepository
 import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.Routine
@@ -51,15 +49,6 @@ class HomeViewModel @Inject constructor(
             runtime.startRoutine(routine)
         }
     }
-
-    private val accessibility = AccessibilityWatch(context, viewModelScope)
-
-    val permissions: StateFlow<PermissionStatus> = accessibility.status
-
-    /** True only when accessibility has stayed disconnected long enough to be a real fault. */
-    val accessibilityStuck: StateFlow<Boolean> = accessibility.stuck
-
-    fun refreshPermissions() = accessibility.refresh()
 
     fun submit(prompt: String) {
         val trimmed = prompt.trim()

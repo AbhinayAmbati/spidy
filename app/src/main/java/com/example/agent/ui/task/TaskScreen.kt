@@ -1,5 +1,7 @@
 package com.example.agent.ui.task
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,11 +57,23 @@ fun TaskScreen(
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val paused by viewModel.paused.collectAsStateWithLifecycle()
     val routineSaved by viewModel.routineSaved.collectAsStateWithLifecycle()
+    val permissionRequest by viewModel.permissionRequest.collectAsStateWithLifecycle()
+
+    // The guard said contacts access is missing: ask for it here, then the run retries once.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+        viewModel::permissionResult,
+    )
+    LaunchedEffect(permissionRequest) {
+        permissionRequest?.let { permissionLauncher.launch(it.permission) }
+    }
 
     TaskContent(
         progress = progress,
         paused = paused,
         routineSaved = routineSaved,
+        canPause = viewModel.canPause(),
+        canSaveRoutine = viewModel.canSaveRoutine(),
         onBack = onBack,
         onStop = viewModel::stop,
         onPause = viewModel::pause,
@@ -100,6 +114,8 @@ private fun TaskContent(
     onRetry: () -> Unit,
     onSaveRoutine: () -> Unit,
     onAnswer: (String) -> Unit,
+    canPause: Boolean = true,
+    canSaveRoutine: Boolean = true,
 ) {
     var answerText by remember { mutableStateOf("") }
     val scroll = rememberScrollState()
@@ -175,6 +191,7 @@ private fun TaskContent(
                     vertical = SpideySpacing.sm,
                 ),
             )
+            running && !canPause && !paused -> Unit
             running -> StickyActionBar {
                 if (paused) {
                     PrimaryButton(text = "Resume", onClick = onResume, modifier = Modifier.fillMaxWidth())
@@ -194,12 +211,14 @@ private fun TaskContent(
             }
             completed -> StickyActionBar {
                 Row(horizontalArrangement = Arrangement.spacedBy(SpideySpacing.xs)) {
-                    SecondaryButton(
-                        text = if (routineSaved) "Saved" else "Save as routine",
-                        onClick = onSaveRoutine,
-                        enabled = !routineSaved,
-                        modifier = Modifier.weight(1f),
-                    )
+                    if (canSaveRoutine) {
+                        SecondaryButton(
+                            text = if (routineSaved) "Saved" else "Save as routine",
+                            onClick = onSaveRoutine,
+                            enabled = !routineSaved,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     PrimaryButton(text = "Done", onClick = onBack, modifier = Modifier.weight(1f))
                 }
             }
