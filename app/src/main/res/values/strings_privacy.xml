@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Privacy and data -->
+    <string name="privacy_section">Privacy and data</string>
+    <string name="privacy_managed_badge">Managed by your administrator</string>
+    <string name="privacy_managed_summary">Some of these settings are set by your organisation and cannot be changed here.</string>
+    <string name="privacy_retention_title">Keep activity log for</string>
+    <string name="privacy_retention_subtitle">A short log of what Spidey did, kept only on this phone. Older entries are deleted automatically.</string>
+    <string name="privacy_retention_7">7 days</string>
+    <string name="privacy_retention_30">30 days</string>
+    <string name="privacy_retention_90">90 days</string>
+    <string name="privacy_retention_off">Off</string>
+    <string name="privacy_retention_managed_value">%1$s (set by your administrator)</string>
+    <string name="privacy_request_title">What to keep of your request</string>
+    <string name="privacy_request_subtitle">Your sentence is never stored in full.</string>
+    <string name="privacy_request_hash">Fingerprint</string>
+    <string name="privacy_request_truncated">Start only</string>
+    <string name="privacy_request_none">Nothing</string>
+    <string name="privacy_contacts_title">Keep contact names in log</string>
+    <string name="privacy_contacts_subtitle">Off: contacts appear as a placeholder. Message text and phone numbers are never kept.</string>
+    <string name="privacy_export_title">Export my data</string>
+    <string name="privacy_export_subtitle">Save task history and the activity log as a JSON file.</string>
+    <string name="privacy_export_done">Saved. The file is only as private as where you put it.</string>
+    <string name="privacy_export_failed">Could not save the file.</string>
+    <string name="privacy_delete_title">Delete all my data</string>
+    <string name="privacy_delete_subtitle">Task history, activity log, memory and routines. Settings stay.</string>
+    <string name="privacy_delete_done">All data deleted.</string>
+    <string name="privacy_delete_confirm_title">Delete all your data?</string>
+    <string name="privacy_delete_confirm_message">This removes your task history, activity log, memory and saved routines from this phone. It cannot be undone.</string>
+    <string name="privacy_delete_confirm_action">Delete</string>
+    <string name="privacy_log_count">%1$d entries in the activity log</string>
+
+    <!-- Permission rationale -->
+    <string name="permission_contacts_title">Contacts</string>
+    <string name="permission_contacts_rationale">Used to find the person you name when you ask Spidey to call or message someone. Contacts are read on this phone only and never uploaded.</string>
+    <string name="permission_microphone_title">Microphone</string>
+    <string name="permission_microphone_rationale">Used only while you hold the microphone to dictate a request. Audio is turned into text by your phone and is not kept.</string>
+    <string name="permission_voice_managed">Voice input is turned off by your administrator.</string>
+    <string name="permission_on">On</string>
+    <string name="permission_off">Off</string>
+
+    <!-- Managed configuration (app_restrictions.xml) -->
+    <string name="restriction_disable_voice_title">Disable voice input</string>
+    <string name="restriction_disable_voice_description">Hide the microphone so requests can only be typed.</string>
+    <string name="restriction_always_confirm_title">Always confirm</string>
+    <string name="restriction_always_confirm_description">Ask for confirmation before every action, including ones that normally run directly.</string>
+    <string name="restriction_allowed_actions_title">Allowed actions</string>
+    <string name="restriction_allowed_actions_description">The only actions Spidey may perform. Anything else is refused.</string>
+    <string name="restriction_audit_retention_title">Activity log retention (days)</string>
+    <string name="restriction_audit_retention_description">How long the on-device activity log is kept. 0 turns it off. Overrides the user\'s choice.</string>
+    <string name="restriction_metered_title">No model download on mobile data</string>
+    <string name="restriction_metered_description">Wait for Wi-Fi before downloading the on-device model.</string>
+
+    <string-array name="restriction_action_titles">
+        <item>Open apps</item>
+        <item>Send messages</item>
+        <item>Call contacts</item>
+        <item>Set alarms</item>
+        <item>Set timers</item>
+    </string-array>
+    <string-array name="restriction_action_values">
+        <item>open_app</item>
+        <item>send_message</item>
+        <item>call_contact</item>
+        <item>set_alarm</item>
+        <item>set_timer</item>
+    </string-array>
+</resources>

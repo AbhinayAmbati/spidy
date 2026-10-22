@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <restriction
+        android:key="disable_voice"
+        android:title="@string/restriction_disable_voice_title"
+        android:description="@string/restriction_disable_voice_description"
+        android:restrictionType="bool"
+        android:defaultValue="false" />
+
+    <restriction
+        android:key="always_confirm"
+        android:title="@string/restriction_always_confirm_title"
+        android:description="@string/restriction_always_confirm_description"
+        android:restrictionType="bool"
+        android:defaultValue="false" />
+
+    <restriction
+        android:key="allowed_actions"
+        android:title="@string/restriction_allowed_actions_title"
+        android:description="@string/restriction_allowed_actions_description"
+        android:restrictionType="multi-select"
+        android:entries="@array/restriction_action_titles"
+        android:entryValues="@array/restriction_action_values"
+        android:defaultValue="@array/restriction_action_values" />
+
+    <restriction
+        android:key="audit_retention_days"
+        android:title="@string/restriction_audit_retention_title"
+        android:description="@string/restriction_audit_retention_description"
+        android:restrictionType="integer" />
+
+    <restriction
+        android:key="disable_model_download_on_metered"
+        android:title="@string/restriction_metered_title"
+        android:description="@string/restriction_metered_description"
+        android:restrictionType="bool"
+        android:defaultValue="false" />
+</restrictions>
