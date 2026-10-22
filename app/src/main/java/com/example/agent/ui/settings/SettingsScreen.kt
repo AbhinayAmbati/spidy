@@ -76,6 +76,7 @@ fun SettingsScreen(
     onOpenMemory: () -> Unit,
     onOpenTerms: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
+    privacyViewModel: PrivacyViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
@@ -86,6 +87,7 @@ fun SettingsScreen(
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
     val spidey by viewModel.spideyStatus.collectAsStateWithLifecycle()
     val whistle by viewModel.whistleStatus.collectAsStateWithLifecycle()
+    val privacy by privacyViewModel.state.collectAsStateWithLifecycle()
 
     // Overlay permission, accessibility and notification access are all granted on *system*
     // screens, so the state has to be re-read on the way back or a row would still say
@@ -94,6 +96,7 @@ fun SettingsScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshOverlayPermission()
         viewModel.refreshPermissions()
+        privacyViewModel.refreshPermissions()
     }
 
     // Granting notifications is a real dialog, so the row is re-read when it closes.
@@ -101,7 +104,26 @@ fun SettingsScreen(
         ActivityResultContracts.RequestPermission(),
     ) { viewModel.refreshPermissions() }
 
+    val contactsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { privacyViewModel.refreshPermissions() }
+    val microphoneLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { privacyViewModel.refreshPermissions() }
+
+    val privacyActions = PrivacyActions(
+        onRetentionChange = { privacyViewModel.setRetention(it) },
+        onRequestTextModeChange = { privacyViewModel.setRequestTextMode(it) },
+        onKeepContactNamesChange = { privacyViewModel.setKeepContactNames(it) },
+        onExport = { privacyViewModel.export(it) },
+        onDeleteAll = { privacyViewModel.deleteAll() },
+        onRequestContacts = { contactsLauncher.launch(Manifest.permission.READ_CONTACTS) },
+        onRequestMicrophone = { microphoneLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+    )
+
     SettingsContent(
+        privacy = privacy,
+        privacyActions = privacyActions,
         state = SettingsUiState(
             appearance = appearance,
             memoryEnabled = memory,
@@ -136,6 +158,8 @@ fun SettingsScreen(
 @Composable
 private fun SettingsContent(
     state: SettingsUiState,
+    privacy: PrivacyUiState,
+    privacyActions: PrivacyActions,
     versionName: String,
     onEnableAccessibility: () -> Unit,
     onEnableNotifications: () -> Unit,
@@ -210,6 +234,9 @@ private fun SettingsContent(
                 onClick = onGrantOverlay,
             )
 
+            RowDivider(inset = true)
+            PermissionRationaleRows(state = privacy, actions = privacyActions)
+
             SectionLabel(text = stringResource(R.string.settings_appearance))
             SegmentedControl(
                 options = AppearanceMode.entries.map { it.name },
@@ -242,7 +269,8 @@ private fun SettingsContent(
                 onClick = onOpenMemory,
             )
 
-            SectionLabel(text = stringResource(R.string.settings_privacy))
+            PrivacyDataSection(state = privacy, actions = privacyActions)
+            RowDivider(inset = true)
             ListRow(
                 title = "Clear task history",
                 subtitle = "Screens are summarised before the model sees them. Raw screen data is never logged.",
@@ -343,6 +371,8 @@ private fun PermissionRow(
 private fun SettingsPreview() {
     SpideyTheme {
         SettingsContent(
+            privacy = PrivacyUiState(),
+            privacyActions = PrivacyActions.None,
             state = SettingsUiState(
                 appearance = AppearanceMode.System,
                 memoryEnabled = true,
