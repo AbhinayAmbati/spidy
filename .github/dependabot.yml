@@ -1,0 +1,37 @@
+# Weekly update PRs for build dependencies and for the actions used by the workflows.
+# gradle/libs.versions.toml (the version catalog) is read by the gradle ecosystem.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "build"
+    groups:
+      # Kotlin, KSP and the Compose compiler must move together; one PR keeps them consistent.
+      kotlin-toolchain:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+      androidx:
+        patterns:
+          - "androidx.*"
+      # Major upgrades of these pairs are breaking (Kotlin 2 needs the Compose compiler plugin,
+      # AGP needs a matching Gradle); they are reviewed by hand rather than batched.
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies
+      - ci

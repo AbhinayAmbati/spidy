@@ -1,0 +1,19 @@
+# Changes to these paths need a review from the code owner. Pair this with branch protection
+# ("Require review from Code Owners") on main. A path matched by a later line wins.
+
+*                              @AbhinayAmbati
+
+# Release pipeline, signing and supply chain
+/.github/                      @AbhinayAmbati
+/app/build.gradle.kts          @AbhinayAmbati
+/build.gradle.kts              @AbhinayAmbati
+/settings.gradle.kts           @AbhinayAmbati
+/gradle/                       @AbhinayAmbati
+/gradle.properties             @AbhinayAmbati
+/app/proguard-rules.pro        @AbhinayAmbati
+/keystore.properties.example   @AbhinayAmbati
+/tools/                        @AbhinayAmbati
+/docs/RELEASING.md             @AbhinayAmbati
+
+# The pinned model hashes: a change here changes what every installation downloads.
+/app/src/main/java/com/example/agent/core/ai/local/ModelSpec.kt  @AbhinayAmbati
