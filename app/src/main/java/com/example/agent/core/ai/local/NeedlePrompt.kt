@@ -72,8 +72,13 @@ object NeedlePrompt {
             done.forEach { appendLine("- $it") }
         }
 
-        appendLine("Screen:")
-        append(screenOf(messages))
+        // Before anything has run the only tools on offer open an app or a link, and the
+        // screen (often the agent's own) was pulling the model's arguments off the page:
+        // "Open YouTube" came back as open_app("Google Drive"). The task alone is cleaner.
+        if (messages.any { it.role == MessageRole.Tool }) {
+            appendLine("Screen:")
+            append(screenOf(messages))
+        }
     }
 
     private fun taskOf(messages: List<AgentMessage>): String {

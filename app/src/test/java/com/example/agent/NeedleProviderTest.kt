@@ -96,11 +96,11 @@ class NeedleProviderTest {
     // ---- prompt ----------------------------------------------------------------------
 
     @Test
-    fun `the input carries the task and the screen but not the system prompt`() {
+    fun `the first input is the task alone, without the screen or the system prompt`() {
         val input = NeedlePrompt.input(conversation())
 
         assertThat(input).contains("Task: open the settings")
-        assertThat(input).contains("[k1] \"Search\" <EditText>")
+        assertThat(input).doesNotContain("[k1]")
         assertThat(input).doesNotContain("ignored")
     }
 
@@ -122,7 +122,10 @@ class NeedleProviderTest {
     @Test
     fun `a long screen is capped`() {
         val listing = (1..200).joinToString("\n") { "[k$it] \"Item $it\"" }
-        val messages = listOf(AgentMessage(MessageRole.User, "Task: scroll\n\nCurrent screen:\n$listing"))
+        val messages = listOf(
+            AgentMessage(MessageRole.User, "Task: scroll"),
+            AgentMessage(MessageRole.Tool, "Observation:\n$listing", toolCallId = "c1", name = "read_screen"),
+        )
 
         val lines = NeedlePrompt.input(messages).lines().count { it.startsWith("[k") }
 
