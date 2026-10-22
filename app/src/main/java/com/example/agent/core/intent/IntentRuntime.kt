@@ -2,6 +2,10 @@ package com.example.agent.core.intent
 
 import com.example.agent.core.agent.AgentClock
 import com.example.agent.core.agent.TaskJournal
+import com.example.agent.core.audit.AuditEvent
+import com.example.agent.core.audit.AuditLog
+import com.example.agent.core.audit.AuditResult
+import com.example.agent.core.audit.AuditVerdict
 import com.example.agent.core.control.AgentHalt
 import com.example.agent.domain.model.AwaitingKind
 import com.example.agent.domain.model.RecordedStep
@@ -51,6 +55,7 @@ class IntentRuntime(
     private val clock: AgentClock,
     private val scope: CoroutineScope,
     confirmGate: ConfirmGate? = null,
+    private val audit: AuditLog? = null,
 ) {
 
     private val _progress = MutableStateFlow(idleProgress())
@@ -123,6 +128,7 @@ class IntentRuntime(
             if (AgentHalt.isStopped) throw CancellationException("Stopped by the user")
 
             if (routed.intents.isEmpty()) {
+                record(taskId, sentence, startedAt, null, AuditVerdict.NONE, null, AuditResult.REJECTED)
                 finish(taskId, sentence, startedAt, steps, TaskState.FAILED, CANNOT_DO_THAT)
                 return
             }
@@ -151,16 +157,20 @@ class IntentRuntime(
 
                 when (verdict) {
                     is GuardVerdict.Reject -> {
+                        record(taskId, sentence, startedAt, requested, AuditVerdict.REJECT, null, AuditResult.REJECTED)
                         mark(steps, index, StepStatus.Failed, verdict.reason)
                         finish(taskId, sentence, startedAt, steps, TaskState.FAILED, verdict.reason)
                         return
                     }
                     is GuardVerdict.Allow -> {
                         steps[index] = steps[index].copy(label = describe(verdict.intent))
+                        var confirmed: Boolean? = null
                         if (verdict.needsConfirmation) {
                             val allowed = gate.confirm(verdict.summary)
+                            confirmed = allowed
                             restoreRunningState()
                             if (!allowed) {
+                                record(taskId, sentence, startedAt, verdict.intent, AuditVerdict.ALLOW, false, AuditResult.CANCELLED)
                                 mark(steps, index, StepStatus.Failed, DECLINED)
                                 finish(taskId, sentence, startedAt, steps, TaskState.CANCELLED, DECLINED)
                                 return
@@ -171,8 +181,12 @@ class IntentRuntime(
                         if (AgentHalt.isStopped) throw CancellationException("Stopped by the user")
 
                         when (val result = executor.execute(verdict.intent)) {
-                            is ActionResult.Done -> mark(steps, index, StepStatus.Done, result.message)
+                            is ActionResult.Done -> {
+                                record(taskId, sentence, startedAt, verdict.intent, AuditVerdict.ALLOW, confirmed, AuditResult.DONE)
+                                mark(steps, index, StepStatus.Done, result.message)
+                            }
                             is ActionResult.Failed -> {
+                                record(taskId, sentence, startedAt, verdict.intent, AuditVerdict.ALLOW, confirmed, AuditResult.FAILED)
                                 mark(steps, index, StepStatus.Failed, result.reason)
                                 finish(taskId, sentence, startedAt, steps, TaskState.FAILED, result.reason)
                                 return
@@ -223,6 +237,38 @@ class IntentRuntime(
         } finally {
             permission = null
             _permissionRequest.value = null
+        }
+    }
+
+    /** Writes one audit event. A failing log never fails the task, but Stop still gets through. */
+    private suspend fun record(
+        taskId: String,
+        sentence: String,
+        startedAt: Long,
+        intent: SpideyIntent?,
+        verdict: AuditVerdict,
+        confirmed: Boolean?,
+        result: AuditResult,
+    ) {
+        val log = audit ?: return
+        val now = clock.currentTimeMillis()
+        try {
+            log.record(
+                AuditEvent(
+                    id = UUID.randomUUID().toString(),
+                    timestampMillis = now,
+                    requestText = sentence,
+                    intent = intent,
+                    guardVerdict = verdict,
+                    confirmed = confirmed,
+                    result = result,
+                    durationMs = now - startedAt,
+                ),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The audit trail is best effort; losing a row must not undo what the user asked for.
         }
     }
 

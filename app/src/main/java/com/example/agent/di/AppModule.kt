@@ -58,6 +58,7 @@ import com.example.agent.data.local.AgentDatabase
 import com.example.agent.data.local.TaskDao
 import com.example.agent.data.preferences.MemoryStore
 import com.example.agent.data.preferences.SettingsRepository
+import com.example.agent.data.repository.AuditRepository
 import com.example.agent.data.repository.MemoryRepository
 import com.example.agent.data.repository.TaskHistoryRepository
 import dagger.Module
@@ -91,7 +92,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AgentDatabase =
         Room.databaseBuilder(context, AgentDatabase::class.java, "spidey.db")
-            .addMigrations(AgentDatabase.MIGRATION_1_2, AgentDatabase.MIGRATION_2_3)
+            .addMigrations(*AgentDatabase.ALL_MIGRATIONS)
             .build()
 
     @Provides
@@ -234,6 +235,7 @@ object AppModule {
         automation: AndroidAutomationManager,
         history: TaskHistoryRepository,
         memory: MemoryRepository,
+        audit: AuditRepository,
         @ApplicationScope scope: CoroutineScope,
     ): IntentRuntime = IntentRuntime(
         router = router,
@@ -242,6 +244,7 @@ object AppModule {
         journal = StoredTaskJournal(history, memory, automation),
         clock = DeviceClock,
         scope = scope,
+        audit = audit,
     )
 
     @Provides
