@@ -29,6 +29,9 @@ import com.example.agent.core.agent.DeviceClock
 import com.example.agent.core.agent.DeviceScreen
 import com.example.agent.core.agent.StoredTaskJournal
 import com.example.agent.core.agent.TouchToStopWatcher
+import com.example.agent.core.actions.ActionLauncher
+import com.example.agent.core.actions.AndroidActionExecutor
+import com.example.agent.core.actions.AndroidActionLauncher
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AIProviderFactory
 import com.example.agent.core.ai.local.ModelDownloader
@@ -40,9 +43,14 @@ import com.example.agent.core.ai.local.OnDeviceModelManager
 import com.example.agent.core.ai.local.SpideyPrompt
 import com.example.agent.core.ai.provider.OpenAICompatibleProvider
 import com.example.agent.core.intent.ActionExecutor
+import com.example.agent.core.intent.ContactsSource
+import com.example.agent.core.intent.ContentResolverContactsSource
+import com.example.agent.core.intent.DeviceIntentGuard
+import com.example.agent.core.intent.InstalledApps
 import com.example.agent.core.intent.IntentGuard
 import com.example.agent.core.intent.IntentRouter
 import com.example.agent.core.intent.IntentRuntime
+import com.example.agent.core.intent.PackageManagerInstalledApps
 import com.example.agent.core.intent.RoutedRequest
 import com.example.agent.core.intent.SpideyRouter
 import com.example.agent.core.security.SecureCredentialStore
@@ -183,6 +191,26 @@ object AppModule {
             isMetered = { connectivity?.isActiveNetworkMetered ?: true },
         )
     }
+
+    @Provides
+    @Singleton
+    fun provideInstalledApps(impl: PackageManagerInstalledApps): InstalledApps = impl
+
+    @Provides
+    @Singleton
+    fun provideContactsSource(impl: ContentResolverContactsSource): ContactsSource = impl
+
+    @Provides
+    @Singleton
+    fun provideActionLauncher(impl: AndroidActionLauncher): ActionLauncher = impl
+
+    @Provides
+    @Singleton
+    fun provideIntentGuard(impl: DeviceIntentGuard): IntentGuard = impl
+
+    @Provides
+    @Singleton
+    fun provideActionExecutor(impl: AndroidActionExecutor): ActionExecutor = impl
 
     /** The model is loaded on the first request, once the download has finished. */
     @Provides
