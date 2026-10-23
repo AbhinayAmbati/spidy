@@ -1,0 +1,70 @@
+{
+  "_comment": "Labels that belong to app UI itself. Matching is exact, case-insensitive. Anything not listed here is removed from memory before it can be written. Never add names, numbers or sentences.",
+  "global": [
+    "back", "navigate up", "up", "close", "cancel", "done", "ok", "yes", "no", "next", "skip", "continue",
+    "search", "search or type web address", "search settings", "search or type url", "find", "filter", "sort",
+    "menu", "more options", "more", "options", "overflow", "settings", "home", "profile", "account", "accounts",
+    "notifications", "explore", "reels", "chats", "calls", "status", "updates", "communities", "contacts",
+    "messages", "message", "camera", "gallery", "photos", "files", "share", "like", "comment", "send", "save",
+    "reply", "follow", "following", "delete", "edit", "add", "new chat", "new message", "new group", "copy",
+    "paste", "select all", "refresh", "retry", "allow", "deny", "turn on", "turn off", "on", "off", "enable",
+    "disable", "sign in", "log in", "log out", "sign up", "create account", "phone number", "email", "password",
+    "tabs", "tab", "new tab", "bookmarks", "history", "downloads", "voice search", "search by voice",
+    "google lens", "lens", "discover", "for you", "trending", "following", "your story", "create", "post",
+    "stories", "story", "bookmarks", "lists", "topics", "premium", "grok", "spaces", "communities",
+    "show more", "see all", "view all", "help", "about", "privacy", "terms", "language", "dark mode"
+  ],
+  "settings": [
+    "wi-fi", "wlan", "bluetooth", "mobile network", "sim cards & mobile networks", "connection & sharing",
+    "lock screen", "display", "sound & vibration", "sound", "notifications & status bar", "home screen",
+    "wallpaper", "themes", "password & security", "privacy", "safety & emergency", "battery", "apps",
+    "additional settings", "about phone", "special features", "digital wellbeing & parental controls",
+    "google", "accounts & sync", "storage", "location", "permissions", "airplane mode", "hotspot", "vpn",
+    "developer options", "system apps", "manage apps", "app lock", "dual apps", "security", "fingerprint",
+    "face unlock", "do not disturb", "brightness", "font size", "accessibility", "date & time", "backup",
+    "software update", "my device", "services & feedback", "ringtone", "volume", "haptic feedback"
+  ],
+  "google": [
+    "search", "images", "videos", "news", "maps", "shopping", "all", "web", "short videos", "forums",
+    "tools", "ai mode", "google search", "microphone", "search with your camera", "sign in", "feed",
+    "discover", "saved", "notifications", "history", "customize", "settings"
+  ],
+  "telegram": [
+    "all chats", "unread", "personal", "groups", "channels", "bots", "archived chats", "saved messages",
+    "new channel", "invite friends", "wallet", "my profile", "telegram features", "attach", "emoji",
+    "voice message", "video message", "write a message", "search"
+  ],
+  "whatsapp": [
+    "all", "unread", "favorites", "groups", "chats", "updates", "communities", "calls", "status",
+    "new chat", "new group", "linked devices", "starred messages", "payments", "meta ai", "ask meta ai",
+    "search", "camera", "channels", "add status", "my status", "type a message", "attach", "emoji",
+    "voice message", "call", "video call", "voice call"
+  ],
+  "instagram": [
+    "home", "search", "reels", "shop", "profile", "create", "messages", "activity", "notifications",
+    "your story", "like", "comment", "share", "save", "more", "explore", "search and explore",
+    "direct", "camera", "new post", "story", "live", "follow", "following", "send", "add to story"
+  ],
+  "twitter": [
+    "home", "search", "grok", "communities", "notifications", "messages", "for you", "following",
+    "new post", "post", "reply", "repost", "like", "bookmark", "share", "views", "trending", "news",
+    "sports", "entertainment", "show more", "who to follow", "search x", "search twitter", "premium",
+    "lists", "bookmarks", "jobs", "settings and privacy"
+  ],
+  "deny_tap": [
+    "send", "post", "like", "unlike", "follow", "unfollow", "following", "comment", "reply", "repost",
+    "delete", "remove", "pay", "buy", "purchase", "confirm", "submit", "share", "call", "video call",
+    "voice call", "save", "install", "uninstall", "enable", "disable", "turn on", "turn off", "allow",
+    "deny", "log out", "sign out", "sign in", "log in", "sign up", "create account", "new post", "create",
+    "add status", "add to story", "block", "report", "clear", "reset", "erase", "factory reset", "update",
+    "download", "upload", "attach", "voice message", "video message", "new chat", "new group", "new message",
+    "invite friends", "bookmark", "mute", "archive", "forward"
+  ],
+  "nav_tap": [
+    "home", "search", "explore", "reels", "chats", "calls", "status", "updates", "communities", "contacts",
+    "notifications", "for you", "all", "images", "videos", "news", "maps", "shopping", "groups", "channels",
+    "unread", "personal", "discover", "wi-fi", "bluetooth", "display", "sound & vibration", "battery",
+    "apps", "about phone", "storage", "privacy", "lock screen", "notifications & status bar", "home screen",
+    "wallpaper", "additional settings", "accessibility", "location", "search settings"
+  ]
+}
