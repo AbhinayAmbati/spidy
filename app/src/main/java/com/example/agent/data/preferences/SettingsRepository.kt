@@ -104,7 +104,7 @@ class SettingsRepository(
         context.dataStore.edit { it[Keys.VOICE_GLOW] = enabled }
     }
 
-    /** The small ASCII character on the status overlay. */
+    /** The small animated blue character on the status overlay. */
     val voiceFace: Flow<Boolean> = context.dataStore.data.map { it[Keys.VOICE_FACE] ?: true }
 
     suspend fun setVoiceFace(enabled: Boolean) {

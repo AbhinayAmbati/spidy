@@ -65,5 +65,5 @@ schema is not documented; confirm it on a phone.
 
 While voice is active, `AgentForegroundService` runs with the microphone service type and
 drives `AgentStatusOverlay`: a `GlowEdgeView` window (translucent blue, shown while listening)
-and an ASCII face on the status pill. Both are optional in Settings and need "Show over other
+and an animated blue character on the status pill. Both are optional in Settings and need "Show over other
 apps". `VoiceTrigger` is the seam for a wake word; only a no-op is bound.

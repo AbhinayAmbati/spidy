@@ -2,7 +2,6 @@ package com.example.agent.automation.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -17,15 +16,15 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 import com.example.agent.R
-import com.example.agent.core.voice.AsciiFace
 import com.example.agent.core.voice.GlowModel
+import com.example.agent.core.voice.MascotAnimator
 import com.example.agent.core.voice.VoiceState
 import com.example.agent.core.voice.VoiceStateMapper
 import com.example.agent.domain.model.TaskState
 
 /**
  * A small, quiet pill pinned above the bottom edge showing what the agent is doing, with an
- * optional ASCII character beside the text and an optional blue glow around the screen edges
+ * optional animated blue character beside the text and an optional blue glow around the screen edges
  * while the microphone is listening.
  *
  * It exists because the task screen is only visible when the app is in front, and the agent
@@ -50,7 +49,7 @@ class AgentStatusOverlay(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
 
     private var pill: LinearLayout? = null
-    private var faceView: TextView? = null
+    private var faceView: MascotView? = null
     private var textView: TextView? = null
     private var glow: GlowEdgeView? = null
 
@@ -144,8 +143,7 @@ class AgentStatusOverlay(private val context: Context) {
         val face = faceView ?: return
         val label = textView ?: return
         face.visibility = if (faceEnabled) View.VISIBLE else View.GONE
-        face.text = AsciiFace.frame(state, tick / FACE_TICKS)
-        face.setTextColor(textColor)
+        face.update(MascotAnimator.pose(state, level, tick * TICK_MILLIS / 1000f), tick * TICK_MILLIS / 1000f)
         label.text = text
         label.setTextColor(textColor)
 
@@ -195,12 +193,8 @@ class AgentStatusOverlay(private val context: Context) {
         }
 
     private fun buildPill(): LinearLayout {
-        val face = TextView(context).apply {
-            typeface = Typeface.MONOSPACE
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            maxLines = 1
-            minEms = FACE_EMS
-            setPadding(0, 0, dp(8), 0)
+        val face = MascotView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(FACE_DP), dp(FACE_DP)).apply { marginEnd = dp(8) }
         }
         val label = TextView(context).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -216,7 +210,7 @@ class AgentStatusOverlay(private val context: Context) {
             addView(face)
             addView(label)
             val paddingX = dp(16)
-            val paddingY = dp(9)
+            val paddingY = dp(6)
             setPadding(paddingX, paddingY, paddingX, paddingY)
             background = GradientDrawable().apply {
                 cornerRadius = dp(22).toFloat()
@@ -248,9 +242,8 @@ class AgentStatusOverlay(private val context: Context) {
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
-        const val TICK_MILLIS = 80L
-        const val FACE_TICKS = 3
-        const val FACE_EMS = 8
+        const val TICK_MILLIS = 40L
+        const val FACE_DP = 40
         const val EASE = 0.35f
         const val MIN_ALPHA = 0.01f
 

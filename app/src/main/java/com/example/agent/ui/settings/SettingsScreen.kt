@@ -274,7 +274,7 @@ private fun SettingsContent(
             RowDivider(inset = true)
             SwitchRow(
                 title = "Status character",
-                subtitle = "A small ASCII face on the status pill. Needs \"Show over other apps\".",
+                subtitle = "A small animated blue character on the status pill. Needs \"Show over other apps\".",
                 checked = state.voiceFace,
                 onCheckedChange = onVoiceFaceChange,
                 icon = Icons.Outlined.Visibility,

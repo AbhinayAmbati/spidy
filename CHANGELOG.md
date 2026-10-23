@@ -9,7 +9,7 @@ All notable changes to this project are documented here. The format follows
 - Fully on-device inference with the Spidey model (fine-tuned from Cactus Needle 3), downloaded on first launch with resume,
   SHA-256 verification and a metered-network check; JNI bridge to the vendor engine.
 - Whistle speech-to-text model download and status in Settings.
-- Voice input: the mic button records (RECORD_AUDIO asked on first use), transcribes on the device with Whistle and sends the text through the intent runtime. Optional blue edge glow while listening and an ASCII status character on the overlay, each switchable in Settings.
+- Voice input: the mic button records (RECORD_AUDIO asked on first use), transcribes on the device with Whistle and sends the text through the intent runtime. Optional blue edge glow while listening and an animated blue character on the overlay, each switchable in Settings.
 - Redesigned chat-style interface: home, task, history, routines and settings screens.
 - GitHub Actions workflow that builds an installable APK (`Release APK`).
 - A feasibility spike (`tools/spidey_eval/`) for measuring accuracy on a phone.

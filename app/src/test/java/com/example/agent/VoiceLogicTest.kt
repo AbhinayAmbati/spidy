@@ -1,10 +1,12 @@
 package com.example.agent
 
-import com.example.agent.core.voice.AsciiFace
 import com.example.agent.core.voice.AudioLevels
 import com.example.agent.core.voice.EndReason
 import com.example.agent.core.voice.EndpointDetector
+import com.example.agent.core.voice.EyeStyle
 import com.example.agent.core.voice.GlowModel
+import com.example.agent.core.voice.MascotAnimator
+import com.example.agent.core.voice.MouthStyle
 import com.example.agent.core.voice.TranscriptCleaner
 import com.example.agent.core.voice.VoiceState
 import com.example.agent.core.voice.VoiceStateMapper
@@ -183,25 +185,60 @@ class VoiceLogicTest {
 
     // ---- visuals ----
 
+    private fun pose(state: VoiceState, level: Float = 0f, t: Float = 0f) = MascotAnimator.pose(state, level, t)
+
     @Test
-    fun `every state has a face and frames cycle`() {
-        val states = listOf(
-            VoiceState.Idle, VoiceState.Listening, VoiceState.Transcribing, VoiceState.Thinking,
-            VoiceState.Acting, VoiceState.Done, VoiceState.Error("x"),
-        )
-        for (state in states) {
-            assertThat(AsciiFace.frames(state)).isNotEmpty()
-            val frames = AsciiFace.frames(state)
-            assertThat(AsciiFace.frame(state, 0)).isEqualTo(frames[0])
-            assertThat(AsciiFace.frame(state, frames.size)).isEqualTo(frames[0])
-            assertThat(AsciiFace.frame(state, -1)).isEqualTo(frames.last())
-        }
+    fun `each state gives the character its own look`() {
+        assertThat(pose(VoiceState.Listening).eyes).isEqualTo(EyeStyle.Wide)
+        assertThat(pose(VoiceState.Thinking).eyes).isEqualTo(EyeStyle.Open)
+        assertThat(pose(VoiceState.Transcribing).eyes).isEqualTo(EyeStyle.Open)
+        assertThat(pose(VoiceState.Acting).eyes).isEqualTo(EyeStyle.Squint)
+        assertThat(pose(VoiceState.Done).eyes).isEqualTo(EyeStyle.Happy)
+        assertThat(pose(VoiceState.Done).mouth).isEqualTo(MouthStyle.Smile)
+        assertThat(pose(VoiceState.Error("x")).eyes).isEqualTo(EyeStyle.Cross)
+        assertThat(pose(VoiceState.Error("x")).mouth).isEqualTo(MouthStyle.Frown)
+        assertThat(pose(VoiceState.Idle).eyes).isEqualTo(EyeStyle.Open)
     }
 
     @Test
-    fun `listening animates and done and error are distinct`() {
-        assertThat(AsciiFace.frames(VoiceState.Listening).toSet().size).isGreaterThan(1)
-        assertThat(AsciiFace.frame(VoiceState.Done, 0)).isNotEqualTo(AsciiFace.frame(VoiceState.Error("x"), 0))
+    fun `the character opens its mouth and grows with the voice`() {
+        val quiet = pose(VoiceState.Listening, level = 0f)
+        val loud = pose(VoiceState.Listening, level = 0.3f)
+        assertThat(loud.mouthOpen).isGreaterThan(quiet.mouthOpen)
+        assertThat(loud.scale).isGreaterThan(quiet.scale)
+        assertThat(loud.mouthOpen).isAtMost(1f)
+    }
+
+    @Test
+    fun `thinking shows dots and looks around`() {
+        val dots = (0..40).map { pose(VoiceState.Thinking, t = it * 0.1f).dots }.toSet()
+        assertThat(dots).containsAtLeast(0, 1, 2, 3)
+        val looks = (0..40).map { pose(VoiceState.Thinking, t = it * 0.1f).lookX }.toSet()
+        assertThat(looks.size).isGreaterThan(5)
+        assertThat(pose(VoiceState.Listening).dots).isEqualTo(0)
+    }
+
+    @Test
+    fun `only acting scuttles and only done and acting hop`() {
+        assertThat(pose(VoiceState.Acting, t = 0.2f).legSwing).isEqualTo(1f)
+        assertThat(pose(VoiceState.Listening).legSwing).isEqualTo(0f)
+        assertThat(pose(VoiceState.Done, t = 0.4f).hop).isGreaterThan(0f)
+        assertThat(pose(VoiceState.Thinking, t = 0.4f).hop).isEqualTo(0f)
+    }
+
+    @Test
+    fun `an error shakes`() {
+        val tilts = (0..20).map { pose(VoiceState.Error("x"), t = it * 0.03f).tiltDegrees }
+        assertThat(tilts.max()).isGreaterThan(0f)
+        assertThat(tilts.min()).isLessThan(0f)
+    }
+
+    @Test
+    fun `an idle character blinks now and then and never leaves its range`() {
+        val blinks = (0..4000).map { pose(VoiceState.Idle, t = it * 0.01f).blink }
+        assertThat(blinks.max()).isGreaterThan(0.9f)
+        assertThat(blinks.min()).isEqualTo(0f)
+        assertThat(blinks.all { it in 0f..1f }).isTrue()
     }
 
     @Test

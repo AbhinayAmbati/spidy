@@ -3,31 +3,6 @@ package com.example.agent.core.voice
 import kotlin.math.PI
 import kotlin.math.sin
 
-/** The small ASCII character on the overlay. Pure, so the frames are testable. */
-object AsciiFace {
-
-    private val idle = listOf("(-_-)")
-    private val listening = listOf("(o_o)", "(o_O)", "(O_O)", "(O_o)")
-    private val thinking = listOf("(-_-).  ", "(-_-).. ", "(-_-)...")
-    private val acting = listOf("(>_>)", "(>_<)", "(<_<)", "(>_<)")
-    private val done = listOf("(^_^)")
-    private val error = listOf("(x_x)")
-
-    fun frames(state: VoiceState): List<String> = when (state) {
-        VoiceState.Idle -> idle
-        VoiceState.Listening -> listening
-        VoiceState.Transcribing, VoiceState.Thinking -> thinking
-        VoiceState.Acting -> acting
-        VoiceState.Done -> done
-        is VoiceState.Error -> error
-    }
-
-    fun frame(state: VoiceState, tick: Int): String {
-        val all = frames(state)
-        return all[Math.floorMod(tick, all.size)]
-    }
-}
-
 /** How strongly the blue edge glow shows. */
 object GlowModel {
 
