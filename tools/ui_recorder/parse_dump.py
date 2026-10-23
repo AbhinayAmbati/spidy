@@ -95,5 +95,6 @@ def parse_dump(raw: str, allowed: set[str]) -> Dump | None:
             scrollable=scrollable, enabled=_flag(el.get("enabled")), password=password,
             bounds=(l, t, r, b),
         ))
-    pkgs = sorted((p for p in counts if p), key=lambda p: -counts[p])
+    # The system UI (status bar, nav bar) is always present; the app is the next most common.
+    pkgs = sorted((p for p in counts if p), key=lambda p: (p == "com.android.systemui", -counts[p]))
     return Dump(nodes, pkgs, has_pw)

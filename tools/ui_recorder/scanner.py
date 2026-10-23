@@ -76,7 +76,8 @@ def check_row(row: dict, allowed_labels: set[str] | None = None,
             continue
         for label in QUOTED.findall(text):
             n = _SPACE.sub(" ", label.strip()).casefold()
-            if label == ITEM or n in allowed or label in ids:
+            # ids may be cut to the label length limit, so a prefix of a seen id is fine
+            if label == ITEM or n in allowed or any(i.startswith(label) for i in ids):
                 continue
             if len(label) > MAX_STRING:
                 bad.append(f"{key}: long free text")

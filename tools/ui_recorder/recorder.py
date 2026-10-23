@@ -137,6 +137,12 @@ class Recorder:
         self.out.mkdir(parents=True, exist_ok=True)
         self.allow = Allowlist().all_labels()
         self.stats: dict[str, dict] = {}
+        old = self.out / "summary.json"
+        if old.exists():
+            try:
+                self.stats = json.loads(old.read_text(encoding="utf-8"))
+            except ValueError:
+                pass
 
     def _stat(self, app: str) -> dict:
         return self.stats.setdefault(app, {"rows": 0, "blocked": 0, "rejected": 0, "screens": 0,
@@ -161,6 +167,9 @@ class Recorder:
         problems = check_row(row, self.allow, before.ids() | after.ids())
         if problems:
             st["rejected"] += 1  # counted, content discarded, never written
+            for p in problems:  # categories only, e.g. "screen: label not on allowlist"
+                st.setdefault("rejected_reasons", {})
+                st["rejected_reasons"][p] = st["rejected_reasons"].get(p, 0) + 1
             return False
         self._append(app, row)
         st["rows"] += 1
