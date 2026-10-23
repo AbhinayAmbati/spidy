@@ -1,5 +1,9 @@
 package com.example.agent.ui.home
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -19,9 +23,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.agent.core.voice.VoiceState
 import com.example.agent.domain.model.AppearanceMode
 import com.example.agent.domain.model.Routine
 import com.example.agent.domain.model.TaskRecord
@@ -58,7 +65,25 @@ fun HomeScreen(
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val recent by viewModel.recentTasks.collectAsStateWithLifecycle()
     val routines by viewModel.routinesList.collectAsStateWithLifecycle()
+    val voiceState by viewModel.voiceState.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    val micPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) viewModel.startListening() }
+    val onMic = {
+        if (voiceState == VoiceState.Listening) {
+            viewModel.stopListening()
+        } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.startListening()
+        } else {
+            // Asked the first time the microphone is used, not at launch.
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     // Jump to the live conversation the moment a task starts.
     LaunchedEffect(progress.state) {
@@ -79,6 +104,8 @@ fun HomeScreen(
         routines = routines,
         onRunRoutine = viewModel::runRoutine,
         onOpenHistory = onOpenHistory,
+        voiceState = voiceState,
+        onMic = onMic,
     )
 }
 
@@ -92,6 +119,8 @@ private fun HomeContent(
     routines: List<Routine>,
     onRunRoutine: (Routine) -> Unit,
     onOpenHistory: () -> Unit,
+    voiceState: VoiceState = VoiceState.Idle,
+    onMic: (() -> Unit)? = null,
 ) {
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
         HomeTopBar()
@@ -154,6 +183,24 @@ private fun HomeContent(
             }
         }
 
+        val voiceNote = when (voiceState) {
+            VoiceState.Listening -> "Listening… tap the mic to finish"
+            VoiceState.Transcribing -> "Transcribing…"
+            is VoiceState.Error -> voiceState.reason
+            else -> null
+        }
+        if (voiceNote != null) {
+            Text(
+                text = voiceNote,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (voiceState is VoiceState.Error) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.spideyColors.textSecondary
+                },
+                modifier = Modifier.padding(horizontal = SpideySpacing.screenGutter),
+            )
+        }
         Composer(
             value = input,
             onValueChange = onInputChange,
@@ -162,6 +209,8 @@ private fun HomeContent(
                 horizontal = SpideySpacing.screenGutter,
                 vertical = SpideySpacing.sm,
             ),
+            onMicClick = onMic,
+            listening = voiceState == VoiceState.Listening,
         )
     }
 }

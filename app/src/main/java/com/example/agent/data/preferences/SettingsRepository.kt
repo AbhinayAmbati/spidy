@@ -38,6 +38,8 @@ class SettingsRepository(
         val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
         val TOUCH_TO_STOP = booleanPreferencesKey("touch_to_stop")
         val ONBOARDED = booleanPreferencesKey("onboarded")
+        val VOICE_GLOW = booleanPreferencesKey("voice_glow")
+        val VOICE_FACE = booleanPreferencesKey("voice_face")
         val AUDIT_RETENTION_DAYS = intPreferencesKey("audit_retention_days")
         val AUDIT_KEEP_CONTACT_NAMES = booleanPreferencesKey("audit_keep_contact_names")
         val AUDIT_REQUEST_TEXT = stringPreferencesKey("audit_request_text")
@@ -93,6 +95,20 @@ class SettingsRepository(
 
     suspend fun setTouchToStop(enabled: Boolean) {
         context.dataStore.edit { it[Keys.TOUCH_TO_STOP] = enabled }
+    }
+
+    /** The blue glow around the screen edges while listening. */
+    val voiceGlow: Flow<Boolean> = context.dataStore.data.map { it[Keys.VOICE_GLOW] ?: true }
+
+    suspend fun setVoiceGlow(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VOICE_GLOW] = enabled }
+    }
+
+    /** The small ASCII character on the status overlay. */
+    val voiceFace: Flow<Boolean> = context.dataStore.data.map { it[Keys.VOICE_FACE] ?: true }
+
+    suspend fun setVoiceFace(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VOICE_FACE] = enabled }
     }
 
     val onboarded: Flow<Boolean> = context.dataStore.data.map { it[Keys.ONBOARDED] ?: false }

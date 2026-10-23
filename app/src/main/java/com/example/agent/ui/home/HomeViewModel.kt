@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.agent.automation.AgentForegroundService
 import com.example.agent.core.agent.AgentRuntime
+import com.example.agent.core.voice.VoiceController
+import com.example.agent.core.voice.VoiceState
 import com.example.agent.data.repository.RoutineRepository
 import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.Routine
@@ -25,9 +27,17 @@ class HomeViewModel @Inject constructor(
     private val history: TaskHistoryRepository,
     private val routines: RoutineRepository,
     @ApplicationContext private val context: Context,
+    private val voice: VoiceController,
 ) : ViewModel() {
 
     val progress: StateFlow<TaskProgress> = runtime.progress
+
+    val voiceState: StateFlow<VoiceState> = voice.state
+
+    fun startListening() = voice.startListening()
+
+    /** Ends the recording early and transcribes what was heard. */
+    fun stopListening() = voice.stopListening()
 
     /** Stop the running task. The Home status card offered this button but it was inert. */
     fun stop() {

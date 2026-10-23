@@ -34,6 +34,7 @@ import com.example.agent.core.actions.AndroidActionExecutor
 import com.example.agent.core.actions.AndroidActionLauncher
 import com.example.agent.core.ai.AIProviderException
 import com.example.agent.core.ai.AIProviderFactory
+import com.example.agent.core.ai.local.EngineGate
 import com.example.agent.core.ai.local.ModelDownloader
 import com.example.agent.core.ai.local.ModelStatus
 import com.example.agent.core.ai.local.NativeSpideyEngine
@@ -220,7 +221,9 @@ object AppModule {
         @ApplicationContext context: Context,
         models: OnDeviceModelManager,
         downloader: ModelDownloader,
+        gate: EngineGate,
     ): IntentRouter = LazySpideyRouter(
+        gate = gate,
         isReady = { models.spidey.value },
         engineFile = { downloader.fileFor(OnDeviceModels.SPIDEY) },
         toolsJson = { context.assets.open("spidey_tools.json").bufferedReader().use { it.readText() } },
@@ -279,6 +282,7 @@ object AppModule {
  * download is reported as a message the task screen can show.
  */
 private class LazySpideyRouter(
+    private val gate: EngineGate,
     private val isReady: () -> ModelStatus,
     private val engineFile: () -> File,
     private val toolsJson: () -> String,
@@ -303,6 +307,6 @@ private class LazySpideyRouter(
                 "The on-device model has not been downloaded yet. Open Settings to download it.",
             )
         }
-        return SpideyRouter(NativeSpideyEngine(engineFile()), SpideyPrompt(toolsJson()))
+        return SpideyRouter(NativeSpideyEngine(engineFile()), SpideyPrompt(toolsJson()), gate = gate)
     }
 }

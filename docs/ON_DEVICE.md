@@ -50,3 +50,20 @@ must be stated on its Hugging Face page; it is derived from Needle 3 (Apache-2.0
 - `needle_complete` takes one text input and returns one JSON object. The provider resets the
   conversation before every turn and sends a self-contained input.
 - Telemetry is on by default in the engine; the bridge turns it off in `JNI_OnLoad`.
+
+## Voice input
+
+The mic button (`ui/home`) asks for `RECORD_AUDIO` the first time, then `VoiceController` records
+16 kHz mono audio, stops after about 0.9 s of silence (or on a second tap, or after 15 s), and
+sends the audio to `WhistleTranscriber`. Whistle invents text on silence, so audio without speech
+is never transcribed and known silence phrases ("Thank you.", `[BLANK_AUDIO]`) are dropped. The
+text goes to `AgentRuntime.start`, exactly like typed text.
+
+`EngineGate` is the single lock around the native engine: routing a sentence and transcribing
+speech both take it. `WhistleResult` reads the text from the engine's JSON leniently because the
+schema is not documented; confirm it on a phone.
+
+While voice is active, `AgentForegroundService` runs with the microphone service type and
+drives `AgentStatusOverlay`: a `GlowEdgeView` window (translucent blue, shown while listening)
+and an ASCII face on the status pill. Both are optional in Settings and need "Show over other
+apps". `VoiceTrigger` is the seam for a wake word; only a no-op is bound.

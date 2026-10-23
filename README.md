@@ -35,6 +35,7 @@ source of truth.
 | Name resolution against the phone's apps and contacts; spoken time parser | Done |
 | Audit trail, data export and delete-all, managed configuration | Done |
 | Whistle speech-to-text download and status in Settings | Done |
+| Voice input: mic button, on-device Whistle transcription into the intent runtime; listening glow and status character on the overlay | Built; **needs hand checks on a phone** |
 | AccessibilityService agent loop (observe, act) and tool system | Done, used for screen-driven tasks |
 | Cloud providers (OpenAI, Anthropic, Gemini, OpenRouter, custom) in code | Present; the provider screens were removed from the UI |
 | Chat-style UI: Home, Task, History, Routines, Settings, Onboarding | Done |

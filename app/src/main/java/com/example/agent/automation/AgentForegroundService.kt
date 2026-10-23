@@ -1,5 +1,6 @@
 package com.example.agent.automation
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,6 +8,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import com.example.agent.MainActivity
@@ -14,6 +17,10 @@ import com.example.agent.R
 import com.example.agent.automation.overlay.AgentStatusOverlay
 import com.example.agent.core.agent.AgentRuntime
 import com.example.agent.core.agent.AgentStatusText
+import com.example.agent.core.voice.VoiceController
+import com.example.agent.core.voice.VoiceState
+import com.example.agent.core.voice.VoiceStateMapper
+import com.example.agent.data.preferences.SettingsRepository
 import com.example.agent.domain.model.TaskState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +30,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -35,10 +43,46 @@ import javax.inject.Inject
 class AgentForegroundService : Service() {
 
     @Inject lateinit var runtime: AgentRuntime
+    @Inject lateinit var voice: VoiceController
+    @Inject lateinit var settings: SettingsRepository
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var overlay: AgentStatusOverlay? = null
     private var progressJob: Job? = null
+    private var optionsJob: Job? = null
+    private var levelJob: Job? = null
+    private var finishing = false
+    private var afterVoice = false
+
+    private fun finish() {
+        finishing = true
+        overlay?.hide()
+        stopSelf()
+    }
+
+    /**
+     * Android 14 refuses a microphone-type foreground service without RECORD_AUDIO, and this
+     * service also runs typed tasks, so the type is only claimed while actually listening.
+     */
+    private fun enterForeground(listening: Boolean) {
+        val notification = buildNotification("Working…")
+        val mic = listening &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                    (if (mic) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0),
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> startForeground(
+                NOTIFICATION_ID,
+                notification,
+                if (mic) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0,
+            )
+            else -> startForeground(NOTIFICATION_ID, notification)
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -52,14 +96,49 @@ class AgentForegroundService : Service() {
         }
 
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Working…"))
+        enterForeground(listening = intent?.getBooleanExtra(EXTRA_LISTENING, false) == true)
         // A second start must not stack another overlay and collector on the first.
         progressJob?.cancel()
+        optionsJob?.cancel()
+        levelJob?.cancel()
         overlay?.hide()
-        overlay = AgentStatusOverlay(this)
+        finishing = false
+        afterVoice = false
+        val shown = AgentStatusOverlay(this)
+        overlay = shown
+
+        optionsJob = scope.launch {
+            combine(settings.voiceGlow, settings.voiceFace) { glow, face -> glow to face }
+                .collect { (glow, face) -> shown.setOptions(glow, face) }
+        }
+        levelJob = scope.launch { voice.level.collect { shown.setLevel(it) } }
 
         progressJob = scope.launch {
-            runtime.progress.collectLatest { progress ->
+            combine(runtime.progress, voice.state) { progress, voiceState -> progress to voiceState }
+                .collectLatest { (progress, voiceState) ->
+                if (finishing) return@collectLatest
+
+                if (voiceState.isVoicePhase) {
+                    afterVoice = true
+                    overlay?.showVoice(voiceState)
+                    notify(buildNotification(VoiceStateMapper.label(voiceState)))
+                    if (voiceState is VoiceState.Error) {
+                        delay(AgentStatusText.LINGER_MILLIS)
+                        voice.acknowledgeError()
+                        if (!runtime.isRunning) finish()
+                    }
+                    return@collectLatest
+                }
+                if (afterVoice) {
+                    // The voice flow is over. Unless it started a task there is nothing left to
+                    // show, and the last task's finished state must not be shown again.
+                    afterVoice = false
+                    if (!runtime.isRunning) {
+                        finish()
+                        return@collectLatest
+                    }
+                }
+
                 val status = AgentStatusText.line(progress)
 
                 if (progress.state.isTerminal) {
@@ -153,8 +232,12 @@ class AgentForegroundService : Service() {
         private const val NOTIFICATION_ID = 42
         private const val STOPPED_APP_CLOSED = "Stopped: the app was closed."
 
-        fun start(context: Context) {
+        private const val EXTRA_LISTENING = "com.example.agent.extra.LISTENING"
+
+        /** [listening] is true when the microphone is about to be used. */
+        fun start(context: Context, listening: Boolean = false) {
             val intent = Intent(context, AgentForegroundService::class.java)
+                .putExtra(EXTRA_LISTENING, listening)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {

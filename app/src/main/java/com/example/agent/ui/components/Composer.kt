@@ -44,8 +44,8 @@ import com.example.agent.ui.theme.spideyColors
  * that grows to a few lines, a microphone while it is empty, and a send button once there
  * is something to send. The two buttons crossfade.
  *
- * Voice uses the platform's own speech recognizer via ACTION_RECOGNIZE_SPEECH, so there is no
- * audio permission to request and no audio ever leaves the device through us.
+ * Voice: when [onMicClick] is given the app records and transcribes on the device itself;
+ * otherwise the platform's recognizer is used via ACTION_RECOGNIZE_SPEECH.
  */
 @Composable
 fun Composer(
@@ -55,15 +55,21 @@ fun Composer(
     modifier: Modifier = Modifier,
     hint: String = "Ask Spidey to do something",
     enabled: Boolean = true,
+    onMicClick: (() -> Unit)? = null,
+    listening: Boolean = false,
 ) {
     val colors = MaterialTheme.spideyColors
     val context = LocalContext.current
     val tick = rememberTick()
     val canSend = enabled && value.isNotBlank()
 
-    val recognizerAvailable = remember {
+    // With onMicClick the app records and transcribes on the device itself; without it the
+    // platform's recognizer is used, as before.
+    val ownVoice = onMicClick != null
+    val systemRecognizer = remember {
         context.packageManager.resolveActivity(speechIntent(), 0) != null
     }
+    val recognizerAvailable = ownVoice || systemRecognizer
 
     val voiceLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -143,7 +149,9 @@ fun Composer(
                         .clip(CircleShape)
                         .pressClickable(
                             onClick = {
-                                if (enabled && recognizerAvailable) {
+                                if (onMicClick != null) {
+                                    if (enabled) onMicClick()
+                                } else if (enabled && recognizerAvailable) {
                                     try {
                                         voiceLauncher.launch(speechIntent())
                                     } catch (_: ActivityNotFoundException) {
@@ -156,12 +164,14 @@ fun Composer(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Mic,
-                        contentDescription = if (recognizerAvailable) {
-                            "Speak your request"
-                        } else {
-                            "Voice input is not available on this device"
+                        contentDescription = when {
+                            listening -> "Stop listening"
+                            recognizerAvailable -> "Speak your request"
+                            else -> "Voice input is not available on this device"
                         },
-                        tint = if (enabled && recognizerAvailable) {
+                        tint = if (listening) {
+                            MaterialTheme.colorScheme.primary
+                        } else if (enabled && recognizerAvailable) {
                             MaterialTheme.colorScheme.onBackground
                         } else {
                             colors.textSecondary

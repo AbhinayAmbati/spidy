@@ -49,6 +49,12 @@ class SettingsViewModel @Inject constructor(
     val touchToStop: StateFlow<Boolean> = settings.touchToStop
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    val voiceGlow: StateFlow<Boolean> = settings.voiceGlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    val voiceFace: StateFlow<Boolean> = settings.voiceFace
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
     private val accessibility = AccessibilityWatch(context, viewModelScope)
 
     val permissions: StateFlow<PermissionStatus> = accessibility.status
@@ -83,6 +89,10 @@ class SettingsViewModel @Inject constructor(
     fun setMemory(enabled: Boolean) = viewModelScope.launch { settings.setMemoryEnabled(enabled) }
 
     fun setTouchToStop(enabled: Boolean) = viewModelScope.launch { settings.setTouchToStop(enabled) }
+
+    fun setVoiceGlow(enabled: Boolean) = viewModelScope.launch { settings.setVoiceGlow(enabled) }
+
+    fun setVoiceFace(enabled: Boolean) = viewModelScope.launch { settings.setVoiceFace(enabled) }
 
     fun clearHistory() = viewModelScope.launch { history.clear() }
 }
