@@ -34,3 +34,6 @@ tools/ui_recorder/**/__pycache__/
 
 # Synthetic UI-selector training data (generated; never commit)
 tools/ui_synth/out/
+
+# Pilot training set (generated; never commit)
+tools/intent_extra/out/
