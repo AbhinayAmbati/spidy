@@ -63,6 +63,10 @@ jobs:
       - name: Check symbol imports
         run: python3 tools/check_symbols.py app/src
 
+      # Privacy tests for the PC-side UI recorder (redaction, canary strings, scanner).
+      - name: UI recorder tests
+        run: python3 -m unittest discover -s tools/ui_recorder/tests
+
       # Blocking once app/lint-baseline.xml is committed (then only NEW issues fail). Until it
       # exists the findings have never been triaged, and a red build for every pre-existing
       # warning would block all work, so the step reports without failing. hashFiles() is empty

@@ -26,3 +26,8 @@ app/src/main/cpp/engine/
 # Spidey eval downloads and results
 tools/spidey_eval/cache/
 tools/spidey_eval/results.json
+
+# UI recorder output: redacted, but still device-derived. Never commit.
+tools/ui_recorder/out/
+tools/ui_recorder/**/__pycache__/
+*.uidump
