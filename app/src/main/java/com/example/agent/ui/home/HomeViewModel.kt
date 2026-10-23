@@ -7,6 +7,7 @@ import com.example.agent.automation.AgentForegroundService
 import com.example.agent.core.agent.AgentRuntime
 import com.example.agent.core.voice.VoiceController
 import com.example.agent.core.voice.VoiceState
+import com.example.agent.data.preferences.SettingsRepository
 import com.example.agent.data.repository.RoutineRepository
 import com.example.agent.data.repository.TaskHistoryRepository
 import com.example.agent.domain.model.Routine
@@ -28,11 +29,20 @@ class HomeViewModel @Inject constructor(
     private val routines: RoutineRepository,
     @ApplicationContext private val context: Context,
     private val voice: VoiceController,
+    settings: SettingsRepository,
 ) : ViewModel() {
 
     val progress: StateFlow<TaskProgress> = runtime.progress
 
     val voiceState: StateFlow<VoiceState> = voice.state
+
+    val voiceLevel: StateFlow<Float> = voice.level
+
+    val voiceGlow: StateFlow<Boolean> = settings.voiceGlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    val voiceFace: StateFlow<Boolean> = settings.voiceFace
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     fun startListening() = voice.startListening()
 

@@ -2,9 +2,11 @@ package com.example.agent.ui.home
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -92,21 +94,38 @@ fun HomeScreen(
         }
     }
 
-    HomeContent(
-        greeting = greeting(),
-        input = input,
-        onInputChange = { input = it },
-        onSubmit = {
-            viewModel.submit(input)
-            input = ""
-        },
-        recent = recent,
-        routines = routines,
-        onRunRoutine = viewModel::runRoutine,
-        onOpenHistory = onOpenHistory,
-        voiceState = voiceState,
-        onMic = onMic,
-    )
+    val voiceLevel by viewModel.voiceLevel.collectAsStateWithLifecycle()
+    val voiceGlow by viewModel.voiceGlow.collectAsStateWithLifecycle()
+    val voiceFace by viewModel.voiceFace.collectAsStateWithLifecycle()
+    // Over other apps the overlay window shows the glow and character; without that permission
+    // they are drawn here instead, so listening is never invisible.
+    val overlayAllowed = remember(voiceState) { Settings.canDrawOverlays(context) }
+
+    Box {
+        HomeContent(
+            greeting = greeting(),
+            input = input,
+            onInputChange = { input = it },
+            onSubmit = {
+                viewModel.submit(input)
+                input = ""
+            },
+            recent = recent,
+            routines = routines,
+            onRunRoutine = viewModel::runRoutine,
+            onOpenHistory = onOpenHistory,
+            voiceState = voiceState,
+            onMic = onMic,
+        )
+        if (!overlayAllowed && voiceState.isVoicePhase) {
+            InAppVoiceVisuals(
+                state = voiceState,
+                level = voiceLevel,
+                glow = voiceGlow,
+                face = voiceFace,
+            )
+        }
+    }
 }
 
 @Composable
