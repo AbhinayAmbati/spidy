@@ -7,6 +7,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Requested the first time the microphone button is used; audio is transcribed on the device. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Resolves a spoken name to a contact. Read only; messages and calls open the composer and dialer. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -116,7 +120,7 @@
             android:name=".automation.AgentForegroundService"
             android:exported="false"
             android:stopWithTask="true"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="specialUse|microphone">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="user_initiated_agent_task_execution" />

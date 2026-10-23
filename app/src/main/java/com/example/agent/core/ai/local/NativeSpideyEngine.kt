@@ -22,28 +22,31 @@ class NativeSpideyEngine(private val modelFile: File) : LocalToolEngine {
         return String(answer, Charsets.UTF_8)
     }
 
-    private fun ensureLoaded() {
-        if (!SpideyNative.isAvailable) {
-            throw LocalEngineException("This build does not include the on-device engine.")
-        }
-        synchronized(loadedPaths) {
-            if (modelFile.absolutePath in loadedPaths) return
-            if (!modelFile.isFile) throw LocalEngineException("The on-device model has not been downloaded yet.")
-
-            val result = SpideyNative.nativeLoad(modelFile.absolutePath.toUtf8())
-            if (result < 0) throw LocalEngineException("Could not load the on-device model: ${lastError()}")
-            loadedPaths += modelFile.absolutePath
-        }
-    }
-
-    private fun lastError(): String =
-        String(SpideyNative.nativeLastError(), Charsets.UTF_8).ifBlank { "unknown error" }
+    private fun ensureLoaded() = load(modelFile)
 
     private fun String.toUtf8(): ByteArray = toByteArray(Charsets.UTF_8)
 
-    private companion object {
+    companion object {
         // The engine maps a model once per process, so a second engine over the same file must
         // not load it again.
-        val loadedPaths = mutableSetOf<String>()
+        private val loadedPaths = mutableSetOf<String>()
+
+        /** Loads a model file into the engine once per process; Whistle uses this too. */
+        internal fun load(file: File) {
+            if (!SpideyNative.isAvailable) {
+                throw LocalEngineException("This build does not include the on-device engine.")
+            }
+            synchronized(loadedPaths) {
+                if (file.absolutePath in loadedPaths) return
+                if (!file.isFile) throw LocalEngineException("The on-device model has not been downloaded yet.")
+
+                val result = SpideyNative.nativeLoad(file.absolutePath.toByteArray(Charsets.UTF_8))
+                if (result < 0) throw LocalEngineException("Could not load the on-device model: ${lastError()}")
+                loadedPaths += file.absolutePath
+            }
+        }
+
+        internal fun lastError(): String =
+            String(SpideyNative.nativeLastError(), Charsets.UTF_8).ifBlank { "unknown error" }
     }
 }

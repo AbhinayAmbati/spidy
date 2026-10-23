@@ -63,6 +63,8 @@ private data class SettingsUiState(
     val appearance: AppearanceMode,
     val memoryEnabled: Boolean,
     val touchToStop: Boolean,
+    val voiceGlow: Boolean,
+    val voiceFace: Boolean,
     val overlayAllowed: Boolean,
     val accessibilityStuck: Boolean,
     val permissions: PermissionStatus,
@@ -82,6 +84,8 @@ fun SettingsScreen(
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
     val memory by viewModel.memoryEnabled.collectAsStateWithLifecycle()
     val touchToStop by viewModel.touchToStop.collectAsStateWithLifecycle()
+    val voiceGlow by viewModel.voiceGlow.collectAsStateWithLifecycle()
+    val voiceFace by viewModel.voiceFace.collectAsStateWithLifecycle()
     val overlayAllowed by viewModel.overlayAllowed.collectAsStateWithLifecycle()
     val accessibilityStuck by viewModel.accessibilityStuck.collectAsStateWithLifecycle()
     val permissions by viewModel.permissions.collectAsStateWithLifecycle()
@@ -128,6 +132,8 @@ fun SettingsScreen(
             appearance = appearance,
             memoryEnabled = memory,
             touchToStop = touchToStop,
+            voiceGlow = voiceGlow,
+            voiceFace = voiceFace,
             overlayAllowed = overlayAllowed,
             accessibilityStuck = accessibilityStuck,
             permissions = permissions,
@@ -144,6 +150,8 @@ fun SettingsScreen(
         },
         onSelectAppearance = viewModel::setAppearance,
         onTouchToStopChange = viewModel::setTouchToStop,
+        onVoiceGlowChange = viewModel::setVoiceGlow,
+        onVoiceFaceChange = viewModel::setVoiceFace,
         onGrantOverlay = viewModel::openOverlaySettings,
         onMemoryChange = viewModel::setMemory,
         onClearHistory = viewModel::clearHistory,
@@ -166,6 +174,8 @@ private fun SettingsContent(
     onOpenNotificationAccess: () -> Unit,
     onSelectAppearance: (AppearanceMode) -> Unit,
     onTouchToStopChange: (Boolean) -> Unit,
+    onVoiceGlowChange: (Boolean) -> Unit,
+    onVoiceFaceChange: (Boolean) -> Unit,
     onGrantOverlay: () -> Unit,
     onMemoryChange: (Boolean) -> Unit,
     onClearHistory: () -> Unit,
@@ -252,6 +262,22 @@ private fun SettingsContent(
                 checked = state.touchToStop,
                 onCheckedChange = onTouchToStopChange,
                 icon = Icons.Outlined.TouchApp,
+            )
+            RowDivider(inset = true)
+            SwitchRow(
+                title = "Listening glow",
+                subtitle = "A blue glow around the screen edges while Spidey listens. Needs \"Show over other apps\".",
+                checked = state.voiceGlow,
+                onCheckedChange = onVoiceGlowChange,
+                icon = Icons.Outlined.Layers,
+            )
+            RowDivider(inset = true)
+            SwitchRow(
+                title = "Status character",
+                subtitle = "A small animated blue character on the status pill. Needs \"Show over other apps\".",
+                checked = state.voiceFace,
+                onCheckedChange = onVoiceFaceChange,
+                icon = Icons.Outlined.Visibility,
             )
             RowDivider(inset = true)
             SwitchRow(
@@ -377,6 +403,8 @@ private fun SettingsPreview() {
                 appearance = AppearanceMode.System,
                 memoryEnabled = true,
                 touchToStop = true,
+                voiceGlow = true,
+                voiceFace = true,
                 overlayAllowed = false,
                 accessibilityStuck = false,
                 permissions = PermissionStatus(
@@ -394,6 +422,8 @@ private fun SettingsPreview() {
             onOpenNotificationAccess = {},
             onSelectAppearance = {},
             onTouchToStopChange = {},
+            onVoiceGlowChange = {},
+            onVoiceFaceChange = {},
             onGrantOverlay = {},
             onMemoryChange = {},
             onClearHistory = {},

@@ -1,13 +1,12 @@
 package com.example.agent.core.intent
 
 import com.example.agent.core.ai.AIProviderException
+import com.example.agent.core.ai.local.EngineGate
 import com.example.agent.core.ai.local.LocalEngineException
 import com.example.agent.core.ai.local.LocalToolEngine
 import com.example.agent.core.ai.local.SpideyPrompt
 import com.example.agent.core.ai.local.SpideyResponseParser
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -23,9 +22,9 @@ class SpideyRouter(
     private val engine: LocalToolEngine,
     prompt: SpideyPrompt,
     private val maxNewTokens: Int = DEFAULT_MAX_NEW_TOKENS,
+    private val gate: EngineGate = EngineGate(),
 ) : IntentRouter {
 
-    private val gate = Mutex()
     private var prompt: SpideyPrompt = prompt
     private var startedWith: String? = null
 
