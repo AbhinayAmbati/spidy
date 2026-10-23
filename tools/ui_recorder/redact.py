@@ -62,3 +62,25 @@ def safe_id_leaf(resource_id: str | None) -> str | None:
         return None
     leaf = resource_id.rsplit("/", 1)[-1]
     return leaf if _ID_LEAF.match(leaf) else None
+
+
+# Any of these words in a label or resource id means "never tap".
+DENY_TOKENS = {
+    "send", "post", "tweet", "reply", "like", "unlike", "heart", "follow", "unfollow", "following",
+    "comment", "share", "repost", "retweet", "delete", "remove", "pay", "buy", "purchase", "call",
+    "record", "mic", "microphone", "voice", "upload", "camera", "compose", "new", "add", "create",
+    "attach", "confirm", "submit", "save", "install", "uninstall", "enable", "disable", "allow",
+    "deny", "block", "report", "clear", "reset", "erase", "factory", "format", "update", "download",
+    "logout", "signout", "login", "signin", "signup", "log", "sign", "bookmark", "mute", "archive",
+    "forward", "invite", "fab", "story", "stories", "live", "emoji", "gif", "sticker", "photo",
+    "emergency", "sos", "wipe", "root", "oem", "build", "version", "kernel", "bug", "debug",
+    "debugging", "revoke", "authorizations", "developer", "edit", "switch", "toggle", "checkbox", "airplane", "hotspot", "vpn", "unlock", "password",
+}
+
+
+_WORD = re.compile(r"[a-z0-9]+")
+
+
+def is_risky(raw: str | None) -> bool:
+    """True if the (about to be discarded) text contains a never-tap word. Keeps only a bool."""
+    return bool(raw) and bool(set(_WORD.findall(raw.casefold())) & DENY_TOKENS)

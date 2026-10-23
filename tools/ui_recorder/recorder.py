@@ -27,7 +27,7 @@ _ALLOWED = [
     re.compile(r"^exec-out uiautomator dump /dev/tty$"),
     re.compile(r"^shell wm size$"),
     re.compile(r"^shell cmd package resolve-activity --brief [\w.]+$"),
-    re.compile(r"^shell am start -a android\.intent\.action\.MAIN -c android\.intent\.category\.LAUNCHER -n [\w./$]+$"),
+    re.compile(r"^shell am start -a android\.intent\.action\.MAIN -c android\.intent\.category\.LAUNCHER -f 268468224 -n [\w./$]+$"),
     re.compile(r"^shell input swipe \d+ \d+ \d+ \d+ \d+$"),
     re.compile(r"^shell input tap \d+ \d+$"),
     re.compile(r"^shell input keyevent KEYCODE_(BACK|HOME)$"),
@@ -84,7 +84,7 @@ class Adb:
         if not comp or comp.startswith("No activity"):
             return False
         r = self.run("shell", "am", "start", "-a", "android.intent.action.MAIN", "-c",
-                     "android.intent.category.LAUNCHER", "-n", comp)
+                     "android.intent.category.LAUNCHER", "-f", "268468224", "-n", comp)
         return r.returncode == 0 and b"Error" not in r.stdout
 
     def back(self) -> bool:

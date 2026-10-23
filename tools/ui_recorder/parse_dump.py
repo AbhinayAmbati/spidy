@@ -10,7 +10,7 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
-from redact import ITEM, safe_id_leaf, safe_label
+from redact import ITEM, is_risky, safe_id_leaf, safe_label
 
 _BOUNDS = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
 
@@ -27,6 +27,7 @@ class Node:
     scrollable: bool
     enabled: bool
     password: bool
+    risky: bool                  # discarded text contained a never-tap word (boolean only)
     bounds: tuple[int, int, int, int]
 
 
@@ -81,8 +82,10 @@ def parse_dump(raw: str, allowed: set[str]) -> Dump | None:
         has_pw = has_pw or password
 
         label: str | None = None
+        risky = False
         if not editable:  # typed text, hints and passwords are never kept
             raw_label = (el.get("text") or "").strip() or (el.get("content-desc") or "").strip()
+            risky = is_risky(el.get("text")) or is_risky(el.get("content-desc"))
             if raw_label:
                 label = safe_label(raw_label, allowed)
                 if label is None and interactive:
@@ -92,7 +95,7 @@ def parse_dump(raw: str, allowed: set[str]) -> Dump | None:
         nodes.append(Node(
             pkg=pkg, cls=cls, label=label, id_leaf=safe_id_leaf(el.get("resource-id")),
             clickable=clickable, long_clickable=long_c, editable=editable,
-            scrollable=scrollable, enabled=_flag(el.get("enabled")), password=password,
+            scrollable=scrollable, enabled=_flag(el.get("enabled")), password=password, risky=risky,
             bounds=(l, t, r, b),
         ))
     # The system UI (status bar, nav bar) is always present; the app is the next most common.

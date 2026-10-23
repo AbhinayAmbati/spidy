@@ -9,7 +9,7 @@ HERE = Path(__file__).resolve().parent
 PKG = HERE.parent
 sys.path.insert(0, str(PKG))
 
-from explore import tap_allowed  # noqa: E402
+from explore import MAX_DEPTH, is_dialog, tap_decision  # noqa: E402
 from parse_dump import parse_dump  # noqa: E402
 from recorder import Adb, AdbError, Capture, Recorder  # noqa: E402
 from redact import Allowlist  # noqa: E402
@@ -141,15 +141,58 @@ class Scanner(unittest.TestCase):
 
 
 class Safety(unittest.TestCase):
-    def test_tap_gate(self):
+    W, H = 1080, 2400
+
+    def decide(self, app="instagram", **kw):
         allow = Allowlist()
-        d = parse_dump(dump(
-            node("Button", "Like", clickable=True), node("Button", "Send", clickable=True),
-            node("Button", "Reels", clickable=True), node("Button", "Follow", clickable=True),
-            node("Switch", "Wi-Fi", clickable=True), node("Button", "Stranger", clickable=True),
-            node("Button", "Search", clickable=True)), allow.for_app("instagram"))
-        got = {n.label for n in d.nodes if tap_allowed(n, allow.nav_tap(), allow.deny_tap())}
-        self.assertEqual(got, {"Reels", "Search"})
+        d = parse_dump(dump(node(**kw)), allow.for_app(app))
+        n = d.nodes[0]
+        return tap_decision(n, self.W, self.H, app, allow.nav_tap(), allow.deny_tap())
+
+    def test_tap_gate_labels(self):
+        ok = dict(cls="Button", clickable=True)
+        self.assertTrue(self.decide(text="Reels", **ok))
+        self.assertTrue(self.decide(text="Search", **ok))
+        for bad in ("Like", "Send", "Follow", "Stranger", "Comment", "Share"):
+            self.assertFalse(self.decide(text=bad, **ok), bad)
+        self.assertFalse(self.decide(cls="Switch", text="Wi-Fi", clickable=True))
+
+    def test_deny_listed_control_never_tapped_even_by_role_or_bar_position(self):
+        bar = "[0,2200][200,2350]"
+        for bad in ("Like", "Send", "Reply", "Repost", "Share", "Follow", "Comment",
+                    "New chat", "Voice call", "Create", "Add", "Post"):
+            # tab role, bottom bar, clickable or not: still denied
+            self.assertFalse(self.decide(cls="TabWidget", text=bad, clickable=True, bounds=bar), bad)
+            self.assertFalse(self.decide(cls="TextView", text=bad, bounds=bar), bad)
+        for rid in ("com.x:id/send_button", "com.x:id/like_button", "com.x:id/compose_fab",
+                    "com.x:id/mic_icon", "com.x:id/camera_button", "com.x:id/share_row"):
+            self.assertFalse(self.decide(cls="ImageView", rid=rid, clickable=True, bounds=bar), rid)
+
+    def test_role_based_taps_for_bars_and_tabs(self):
+        bar = "[0,2200][200,2350]"
+        # not marked clickable, but allowlisted label in the bottom bar
+        self.assertTrue(self.decide(cls="TextView", text="Home", bounds=bar))
+        # bar icon with a navigation id
+        self.assertTrue(self.decide(cls="ImageView", rid="com.x:id/tab_search", clickable=True,
+                                    bounds=bar))
+        # unknown unlabelled thing in the middle of the screen is skipped
+        self.assertFalse(self.decide(cls="ImageView", clickable=True, bounds="[0,1000][100,1100]"))
+        # unknown <item> in the bar without a navigation id is skipped
+        self.assertFalse(self.decide(cls="ImageView", text="Jane Doe", clickable=True, bounds=bar))
+
+    def test_list_rows_only_in_settings(self):
+        row = dict(cls="LinearLayout", text="Display", clickable=True, bounds="[0,500][1080,640]")
+        self.assertTrue(self.decide(app="settings", **row))
+        self.assertFalse(self.decide(app="whatsapp", **{**row, "text": "Some Person"}))
+        self.assertFalse(self.decide(app="settings", **{**row, "text": "Reset options"}))
+
+    def test_dialog_detection_and_depth_cap(self):
+        allow = Allowlist()
+        d = parse_dump(dump(node("Button", "Cancel", clickable=True),
+                            node("Button", "Delete", clickable=True, bounds="[0,200][100,300]")),
+                       allow.for_app("global"))
+        self.assertTrue(is_dialog(Capture(d, serialize(d), None)))
+        self.assertLessEqual(MAX_DEPTH, 3)
 
     def test_deny_beats_nav(self):
         allow = Allowlist()
