@@ -219,9 +219,8 @@ class VoiceLogicTest {
     }
 
     @Test
-    fun `only acting scuttles and only done and acting hop`() {
-        assertThat(pose(VoiceState.Acting, t = 0.2f).legSwing).isEqualTo(1f)
-        assertThat(pose(VoiceState.Listening).legSwing).isEqualTo(0f)
+    fun `only done and acting hop`() {
+        assertThat(pose(VoiceState.Acting, t = 0.2f).hop).isGreaterThan(0f)
         assertThat(pose(VoiceState.Done, t = 0.4f).hop).isGreaterThan(0f)
         assertThat(pose(VoiceState.Thinking, t = 0.4f).hop).isEqualTo(0f)
     }

@@ -28,8 +28,6 @@ data class MascotPose(
     val tiltDegrees: Float,
     /** Thinking dots shown above the head, 0..3. */
     val dots: Int,
-    /** How hard the little legs scuttle, 0..1. */
-    val legSwing: Float,
 )
 
 /** The blue character's behaviour for each [VoiceState]. */
@@ -42,7 +40,7 @@ object MascotAnimator {
                 eyes = EyeStyle.Open, blink = blink(t), lookX = 0f, lookY = 0f,
                 mouth = MouthStyle.Flat, mouthOpen = 0f,
                 scale = 1f + 0.02f * sin(2 * PI * t / 3.0).toFloat(), hop = 0f,
-                tiltDegrees = 0f, dots = 0, legSwing = 0f,
+                tiltDegrees = 0f, dots = 0,
             )
             VoiceState.Listening -> {
                 val voice = (level * LEVEL_GAIN).coerceIn(0f, 1f)
@@ -50,32 +48,32 @@ object MascotAnimator {
                     eyes = EyeStyle.Wide, blink = 0f, lookX = 0f, lookY = 0f,
                     mouth = MouthStyle.Open, mouthOpen = 0.25f + 0.75f * voice,
                     scale = 1f + 0.12f * voice, hop = 0f,
-                    tiltDegrees = 0f, dots = 0, legSwing = 0f,
+                    tiltDegrees = 0f, dots = 0,
                 )
             }
             VoiceState.Transcribing, VoiceState.Thinking -> MascotPose(
                 eyes = EyeStyle.Open, blink = blink(t), lookX = 0.7f * sin(t * 1.8f), lookY = -0.6f,
                 mouth = MouthStyle.Flat, mouthOpen = 0f,
                 scale = 1f, hop = 0f,
-                tiltDegrees = 5f * sin(t * 1.3f), dots = ((t * 2.5f).toInt() % 4), legSwing = 0f,
+                tiltDegrees = 5f * sin(t * 1.3f), dots = ((t * 2.5f).toInt() % 4),
             )
             VoiceState.Acting -> MascotPose(
                 eyes = EyeStyle.Squint, blink = 0f, lookX = sin(t * 5f), lookY = 0f,
                 mouth = MouthStyle.Flat, mouthOpen = 0f,
                 scale = 1f, hop = 0.08f * abs(sin(t * 6f)),
-                tiltDegrees = 3f * sin(t * 6f), dots = 0, legSwing = 1f,
+                tiltDegrees = 3f * sin(t * 6f), dots = 0,
             )
             VoiceState.Done -> MascotPose(
                 eyes = EyeStyle.Happy, blink = 0f, lookX = 0f, lookY = 0f,
                 mouth = MouthStyle.Smile, mouthOpen = 0f,
                 scale = 1f, hop = 0.12f * abs(sin(t * 4f)),
-                tiltDegrees = 0f, dots = 0, legSwing = 0f,
+                tiltDegrees = 0f, dots = 0,
             )
             is VoiceState.Error -> MascotPose(
                 eyes = EyeStyle.Cross, blink = 0f, lookX = 0f, lookY = 0f,
                 mouth = MouthStyle.Frown, mouthOpen = 0f,
                 scale = 1f, hop = 0f,
-                tiltDegrees = 6f * sin(t * 16f), dots = 0, legSwing = 0f,
+                tiltDegrees = 6f * sin(t * 16f), dots = 0,
             )
         }
     }

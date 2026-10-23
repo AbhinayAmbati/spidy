@@ -10,10 +10,9 @@ import android.view.View
 import com.example.agent.core.voice.EyeStyle
 import com.example.agent.core.voice.MascotPose
 import com.example.agent.core.voice.MouthStyle
-import kotlin.math.sin
 
 /**
- * Spidey's little blue character: a glossy blue bean with two eyes, a mouth and four stubby legs.
+ * Spidey's little blue character: a glossy blue bean with two eyes and a mouth.
  * It only draws a [MascotPose]; how it behaves in each state lives in `MascotAnimator`.
  */
 class MascotView(context: Context) : View(context) {
@@ -27,11 +26,6 @@ class MascotView(context: Context) : View(context) {
     }
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = INK
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-    }
-    private val legs = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = LEG
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
@@ -80,7 +74,6 @@ class MascotView(context: Context) : View(context) {
         canvas.rotate(p.tiltDegrees, cx, feet)
         canvas.scale(1f - (p.scale - 1f) * 0.5f, p.scale, cx, feet)
 
-        drawLegs(canvas, p, s)
         canvas.drawRoundRect(body, body.height() * 0.46f, body.height() * 0.46f, fill)
         oval.set(
             body.left + body.width() * 0.16f, body.top + body.height() * 0.10f,
@@ -92,18 +85,6 @@ class MascotView(context: Context) : View(context) {
         canvas.restore()
 
         drawDots(canvas, p, s)
-    }
-
-    private fun drawLegs(canvas: Canvas, p: MascotPose, s: Float) {
-        legs.strokeWidth = s * 0.045f
-        val y = body.bottom - s * 0.02f
-        val reach = s * 0.12f
-        for (i in 0 until 4) {
-            val side = if (i < 2) -1f else 1f
-            val x = body.centerX() + side * body.width() * (if (i % 2 == 0) 0.18f else 0.34f)
-            val swing = p.legSwing * sin(seconds * 14f + i * 1.6f) * reach * 0.8f
-            canvas.drawLine(x, y, x + side * reach * 0.4f + swing, y + reach, legs)
-        }
     }
 
     private fun drawEyes(canvas: Canvas, p: MascotPose, s: Float) {
@@ -177,7 +158,6 @@ class MascotView(context: Context) : View(context) {
 
     private companion object {
         const val INK = 0xFF0B1B4D.toInt()
-        const val LEG = 0xFF2A5BE8.toInt()
         const val DOT = 0xFF8FC4FF.toInt()
     }
 }
