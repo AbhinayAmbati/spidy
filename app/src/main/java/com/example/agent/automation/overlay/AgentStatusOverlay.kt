@@ -153,7 +153,7 @@ class AgentStatusOverlay(private val context: Context) {
         shownAlpha += (target - shownAlpha) * EASE
         if (shownAlpha > MIN_ALPHA) {
             ensureGlow()
-            glow?.glowAlpha = shownAlpha
+            glow?.update(shownAlpha, tick * TICK_MILLIS / 1000f)
         } else {
             shownAlpha = 0f
             removeGlow()
