@@ -7,7 +7,7 @@ kotlin = "1.9.24"
 # The KSP version is prefixed with the Kotlin version it targets; raise both together.
 ksp = "1.9.24-1.0.20"
 hilt = "2.51.1"
-cyclonedx = "3.5.1"
+cyclonedx = "3.6.0"
 
 # Kotlin 1.9.24 pairs with Compose compiler 1.5.14. Raise both together with Kotlin.
 composeCompiler = "1.5.14"
